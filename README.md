@@ -1,4 +1,4 @@
-# Title
+# The Dynamics of Innovation
 
 # Abstract
 Today, innovation is certainly among the most important factors determining the success of organizations, universities, start-ups, etc. While innovation is often portrayed as the product of either one charismatic leader - or a ragtag team of geniuses - in reality we suspect that innovations, however important, happen in small steps supported by large networks of people.
