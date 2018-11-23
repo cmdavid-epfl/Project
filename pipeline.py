@@ -9,7 +9,7 @@ import pandas as pd
 FUNCTIONS TO QUERY AND SAVE DATA
 """
 
-def query(app_date_from = None, app_date_to = None, patent_number = None, assignee_organization = None, assignee_type = None):
+def query(app_date_from, app_date_to, patent_number, assignee_organization, assignee_type):
     
     """
     Forms query string to pass into get_data()
@@ -112,7 +112,7 @@ def patentsviewAPI(filename, filepath = None, fields = None, app_date_from = Non
     :filepath: string type, data folder path
     :fields:string type, format '"field1", "field2",...'
     :app_date_*: string type, format '"YYYY-MM-DD"'
-    :patent_id / assignee_organization / assignee_type: string type, format '["key1", "key2", ...]' or '"key1"
+    :patent_number / assignee_organization / assignee_type: string type, format '["key1", "key2", ...]' or '"key1"
     
     Outputs
     :file: string type, file path of the saved data
@@ -156,7 +156,13 @@ def counter_to_pandas(counter_object):
 
 def json_to_pandas(file_):
     """
+    Converts saved json data from file to a predefined format. (see analysis.ipynb)
 
+    Input
+    :file_: path to file containing the json data
+
+    Output
+    :output: set of Pandas DataFrames containing the data in a predefined format.
     """
     # load json data file
     json_data = json.load(open(file_))
@@ -165,6 +171,7 @@ def json_to_pandas(file_):
     assignee_type = collections.Counter()
     assignee_organization = collections.Counter()
     cited_patent_number = collections.Counter()
+    patent_type = collections.Counter()
     
     # for the rest of the data, we want to collect all of it and transfer it into Pandas Dataframes
     patent_number = []
@@ -183,6 +190,7 @@ def json_to_pandas(file_):
         if (json_data[page]['patents'] != None):
             for patent in json_data[page]['patents']:
                 patent_number.append(patent['patent_number'])
+                patent_type[patent['patent_type']] += 1
 
                 for inventor in patent['inventors']:
                     inventor_latitude.append(inventor['inventor_latitude'])
@@ -210,6 +218,7 @@ def json_to_pandas(file_):
 
     # output formats
     app_date = pd.DataFrame(data = {'app_date' : app_date}, index = patent_number)
+    patent_type_df = counter_to_pandas(patent_type)
     assignee_type_df = counter_to_pandas(assignee_type)
     assignee_organization_df = counter_to_pandas(assignee_organization)
     cited_patent_number_df = counter_to_pandas(cited_patent_number)
@@ -222,6 +231,7 @@ def json_to_pandas(file_):
                                              'lon' : assignee_longitude}, index = assignee_patent_number)
     
     output = {'date':app_date,
+              'patent_type':patent_type_df,
               'assignee_type': assignee_type_df,
               'assignee_organization': assignee_organization_df,
               'cited_patent_number': cited_patent_number_df,
@@ -229,4 +239,13 @@ def json_to_pandas(file_):
               'inventor_lastknown_location': inventor_lastknown_location,
               'assignee_location': assignee_location}
     
-    return output	
+    return output
+
+
+def clean_data(dataframes):
+        
+
+
+
+    
+    return clean_dataframes
