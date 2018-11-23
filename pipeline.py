@@ -1,4 +1,5 @@
 """ data pipeline functions """
+
 import os
 import requests
 import json
@@ -12,7 +13,7 @@ FUNCTIONS TO QUERY AND SAVE DATA
 def query(app_date_from, app_date_to, patent_number, assignee_organization, assignee_type):
     
     """
-    Forms query string to pass into get_data()
+    Forms query filters string to pass into get_data()
     
     Inputs
     :app_date_*: string type, format '"YYYY-MM-DD"'
@@ -47,7 +48,7 @@ def query(app_date_from, app_date_to, patent_number, assignee_organization, assi
 def get_data(query_str, fields_str, options, filename, filepath):
     """
     Extract and save data from the PatentsView API.
-    Saves each page of data (max 10,000 results) in a dictionary collection, which is later saved to file.
+    Saves each page of data (max 10,000 results) in a dictionary collection, which is then saved to file.
     
     Inputs
     :filename: string type, data filename for the fetched data
@@ -143,7 +144,7 @@ def patentsviewAPI(filename, filepath = None, fields = None, app_date_from = Non
     return file_
 
 """
-FUNCTIONS TO PROCESS DATA
+FUNCTIONS TO PRE-PROCESS DATA
 """
 
 def counter_to_pandas(counter_object):
@@ -156,7 +157,7 @@ def counter_to_pandas(counter_object):
 
 def json_to_pandas(file_):
     """
-    Converts saved json data from file to a predefined format. (see analysis.ipynb)
+    Converts saved json data from file to a predefined format. (see data_preprocessing.ipynb)
 
     Input
     :file_: path to file containing the json data
@@ -203,8 +204,6 @@ def json_to_pandas(file_):
                     assignee_latitude.append(assignee['assignee_latitude'])
                     assignee_longitude.append(assignee['assignee_longitude'])
                     assignee_type[assignee['assignee_type']] += 1
-#                    if (assignee['assignee_type'] == None):
-#                        print(patent['patent_number'])
                     assignee_organization[assignee['assignee_organization']] += 1
                     assignee_patent_number.append(patent['patent_number'])
 
@@ -242,10 +241,110 @@ def json_to_pandas(file_):
     return output
 
 
-def clean_data(dataframes):
-        
+def data_clean(file_):
+    """
+    Converts saved json data from file to the cleaned format used for the data analysis. (see data_preprocessing.ipynb)
 
+    Input
+    :file_: path to files containing the json data, format ['file1','file2',...]
 
-
+    Output
+    :data: set containing the following elements:
+     - inventors: Pandas DataFrame containing the data related to inventors.
+     - assignees: Pandas DataFrame containing the data related to assignees.
+     - patents: Collection containing the data related to patents.
+     - citations: Pandas DataFrame containing the citations data for each patent in the dataset
+    """
+    # load json data file
+    json_data = json.load(open(file_))
     
-    return clean_dataframes
+    # data objects
+    assignee_key_id = []
+    assignee_type = []
+    assignee_org = []
+    assignee_location = []
+    
+    inventor_key_id = []
+    inventor_location = []
+    inventor_last_location = []
+    
+    patent_data = {}
+    
+    cited_patent_number = collections.Counter()
+    
+    # parse json data and fill above collections 
+    for page in json_data:
+        if (json_data[page]['patents'] != None):
+            for patent in json_data[page]['patents']:
+                
+                patent_assignees = []
+                patent_inventors = []
+                patent_number = patent['patent_number']
+                patent_type = patent['patent_type']
+                app_date = patent['applications'][0]['app_date']
+                
+                if (patent_type != 'reissue'):
+                
+                    for inventor in patent['inventors']:
+                        lat = inventor['inventor_latitude']
+                        lon = inventor['inventor_longitude']
+                        l_lat = inventor['inventor_lastknown_latitude']
+                        l_lon = inventor['inventor_lastknown_longitude']
+
+                        if (lat != '0.1') and (lat != None) and (l_lat != '0.1') and (l_lat != None):
+                            inventor_key_id.append(inventor['inventor_key_id'])
+                            inventor_location.append((float(lat), float(lon)))
+                            inventor_last_location.append((float(l_lat), float(l_lon)))
+
+                            patent_inventors.append(inventor['inventor_key_id'])
+
+                    for assignee in patent['assignees']:
+                        type_ = assignee['assignee_type']
+                        org = assignee['assignee_organization']
+                        lat = assignee['assignee_latitude']
+                        lon = assignee['assignee_longitude']
+
+                        if (lat != '0.1') and (lat != None) and (type_ != None):
+                            assignee_key_id.append(assignee['assignee_key_id'])
+                            assignee_type.append(type_)
+                            assignee_org.append(org)
+                            assignee_location.append((float(lat), float(lon)))
+
+                            patent_assignees.append(assignee['assignee_key_id'])
+
+                    for cit_patent in patent['cited_patents']:
+                        cit_pat_num = cit_patent['cited_patent_number']
+
+                        if (cit_pat_num != None):
+                            cited_patent_number[cit_patent['cited_patent_number']] += 1
+
+                    if (len(patent_inventors) != 0):
+                        patent_data[patent_number] = {'type' : patent_type,
+                                                      'date' : app_date,
+                                                      'inventors' : patent_inventors,
+                                                      'assignees' : patent_assignees}
+        else:
+            print('error: empty page')
+
+
+    # output formats
+    assignee_data = pd.DataFrame(data = {'type' : assignee_type,
+                                         'organization' : assignee_org,
+                                         'location' : assignee_location}, index = assignee_key_id)
+    inventor_data = pd.DataFrame(data = {'location' : inventor_location,
+                                         'last_location' : inventor_last_location}, index = inventor_key_id)
+    
+    assignee_data.drop_duplicates(inplace=True)
+    inventor_data.drop_duplicates(inplace=True)
+    
+    patent_data = pd.DataFrame(patent_data)
+    citation_data = counter_to_pandas(cited_patent_number)
+    
+    output = {'assignees' : assignee_data,
+              'inventors' : inventor_data,
+              'patents' : patent_data.T,
+              'citations' : citation_data}
+    
+    return output
+
+
