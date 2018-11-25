@@ -12,16 +12,15 @@ While we're at it, we can go even more in depth and ask a variety of questions w
 
 # Research questions
 Answering the following questions will help us understand the dynamics of innovation and come up with a meaningful analysis.
-- How can we best identify and visualize different geographical innovation networks? Can we estimate the number of people in such networks?
-  - If we then take a few examples of different types of companies and look at the network of patents supporting their own patents, will these networks match up with the former innovation networks, or will they be more self-contained? In the latter case, can we estimate the number of people that make up these networks?
-  - Do similar companies use the same knowledge bases to innovate? For example, if we look at different social networking companies, will the networks supporting their patents be distinct?
-  - What about if we look at university/academic knowledge bases and compare them with those of the companies analyzed above?
-  - What about governmental or non-governmental organizations, or international agencies?
-- Which geographical zones, if any, are innovating the most in what fields? and how have these zones shifted through time?
-  - If they have shifted significantly, what about the knowledge bases? Have they also shifted geographically?
-  - In general, what are the most rapidly innovating fields today?
-- Is there a relationship between the number of patents granted in any given field/geographical area and the number of citations from patents in that field/area? Is there a causal relationship there? In which direction?
-- What does the typical patent-holder look like today (Corporation, Universities, Governments, Individuals), and how has that evolved throughout time / geographies ?
+- **Q1** What does the typical patent-holder look like today (Corporation, Universities, Governments, Individuals), and how has that evolved throughout time / geographies ?
+- **Q1.1** Is a migration of innovators through time visible in the data, e.g. a convergence towards certain innovation centers?
+- **Q1.2** How has the number of assignees and inventors evolved through time for different patent types? Are there significant differences in these numbers between different geographies?  
+- **Q2** How can we best identify and visualize different geographical innovation networks? Can we estimate the number of people in such networks?
+- **Q2.1** If we then take a few examples of different types of companies and look at the network of patents supporting their own patents, will these networks match up with the former innovation networks, or will they be more self-contained? In the latter case, can we estimate the number of people that make up these networks? Are these innovation networks concentrated around specific areas, or are they spread out ?
+- **Q2-2** Do similar companies use the same knowledge bases to innovate? For example, if we look at different social networking companies, will the networks supporting their patents be distinct? Will a given companies patents mostly cite their own previous patents, or will they tap outside innovation networks? On what scale?
+- **Q2.3**  What about if we look at university/academic knowledge bases and compare them with those of the companies analyzed above?
+- **Q2.4** What about governmental or non-governmental organizations, or international agencies?  
+- **Q2.5** How have the innovation networks identified above evolved through time?
 
 
 # Dataset
@@ -33,21 +32,20 @@ The PatentsView data  is available through an API, which we can access through s
 We may also use the **Stanford Patent Citations Network** to help us in the visualizations. The dataset is structured as a direct graph, showing US citations as pairs of nodes (one patent citing another) represented in two columns in a txt.file. The size and format of this dataset should not be an issue. A drawback, however, is that it only contain data for the time period 1975-1999, solely in the US. Making it potentially less suitable to answer some of the research questions.
 
 
-# A list of internal milestones up until project milestone 2
-Week 45
-- Go through the PatentsView database documentation and come up with the relevant features for our analysis.
-- Unstructured experimentations with the database in order to get familiar enough with the database, particularly with regard to any possible inconsistencies.
+# A list of internal milestones for the remainder of the project
+Week 48
+- TBD
 
-Week 46
-- Collect data in a structured format and perform descriptive analysis
-- Structure our research questions into a rough outline for the data story based on initial analysis.
-- Gather all the necessary data for the data story.
+Week 49
+- TBD
 
-Week 47
-- Continue with descriptive analysis and iterate research questions and data story outline.
-- Structure the work in a notebook.
-- Create detailed plan for the rest of the project.
+Week 50
+- TBD
+
+Week 51 - Week 3 (2019)
+- Creation of the poster presentation
+- Printing out the poster
+- Preparing for the presentation
 
 # Questions for TAa
-- Thoughts on the scope and feasibility of the project? 
-- Can we use the API provided by the PatentsView database to query data? 
+TBD
