@@ -20,7 +20,7 @@ def query(app_date_from, app_date_to, patent_number, assignee_organization, assi
     :patent_number / assignee_organization / assignee_type: string type, format '["key1", "key2", ...]' or '"key1"'
     
     Outputs
-    :query_str: string type
+    :query_str: string type, complete query stringt to pass into get_data()
     """
     
     query_str = '{"_and":['
@@ -51,14 +51,13 @@ def get_data(query_str, fields_str, options, filename, filepath):
     Saves each page of data (max 10,000 results) in a dictionary collection, which is then saved to file.
     
     Inputs
+    :query_str: string type, should be output from query() function
+    :fields_str: string type, format '"field1", "field2",...'
     :filename: string type, data filename for the fetched data
     :filepath: string type, data folder path
-    :fields:string type, format '"field1", "field2",...'
-    :app_date_*: string type, format '"YYYY-MM-DD"'
-    :patent_id / assignee_organization / assignee_type: string type, format '["key1", "key2", ...]' or '"key1"
     
     Outputs
-    :file: string type, file path of the saved data
+    :file_: string type, complete file path of the saved data
     """
     
     # if filepath is provided, build complete path
@@ -72,9 +71,19 @@ def get_data(query_str, fields_str, options, filename, filepath):
     
     # request string needs to be a function of the page, in order to automate the process
     request_str = lambda page : 'http://www.patentsview.org/api/patents/query?q=' + query_str + '&f=' + fields_str + '&o=' + options(page)
+
+    # API documentation states that a query longer than 2000 characters can use post method
+    if (len(request_str(page)) > 2000):
+        payload = lambda page : {"q": query_str,
+                                 "f": fields_str,
+                                 "o": options(page)} 
+        fetch = lambda page : requests.post('http://www.patentsview.org/api/patents/query', data = payload(page))
+    else:
+        fetch = lambda page : requests.get(request_str(page))
+        
     
     print('fetching first page')
-    r = requests.get(request_str(page))
+    r = fetch(page)
     data_list[page] = r.json()
 
     # continue until there are less than 10,000 results in the new page, which indicates the end of the results
@@ -83,9 +92,11 @@ def get_data(query_str, fields_str, options, filename, filepath):
         if (r.status_code == 200): 
             page += 1
             print('fetching page', page)
+            # the documentation states that there is no hard limit on the queries, but through our experimentation,
+            # the number of results often seems to be capped at 100,000.
             if (page == 11):
                 print('page limit reached, double check data')
-            r = requests.get(request_str(page))
+            r = fetch(page)
             data_list[page] = r.json()
         else:
             print('Error exit code :',r.status_code)
@@ -116,9 +127,10 @@ def patentsviewAPI(filename, filepath = None, fields = None, app_date_from = Non
     :patent_number / assignee_organization / assignee_type: string type, format '["key1", "key2", ...]' or '"key1"
     
     Outputs
-    :file: string type, file path of the saved data
+    :file_: string type, file path of the saved data
     """
-    filename = filename + '.json'
+    if (filename[-5:] != '.json'):
+        filename = filename + '.json'
     
     # build query string
     query_str = query(app_date_from, app_date_to, patent_number, assignee_organization, assignee_type)
@@ -135,7 +147,7 @@ def patentsviewAPI(filename, filepath = None, fields = None, app_date_from = Non
     
     # set options such that the query returns the maximum number of results per page (10,000)
     # the get_data function will take care of getting the results for all the pages,
-    # though the maximum number of results per query is set at (100,000) or 10 pages.
+    # though the maximum number of results per query seems to be set at (100,000) or 10 pages.
     options = lambda page : '{"page":' + str(page) + ',"per_page":10000}'
     
     # fetch the data from the PatentsView API
@@ -274,6 +286,7 @@ def data_clean(file_):
     
     # parse json data and fill above collections 
     for page in json_data:
+        # when query limit is reached, the results are empty pages
         if (json_data[page]['patents'] != None):
             for patent in json_data[page]['patents']:
                 
@@ -282,7 +295,7 @@ def data_clean(file_):
                 patent_number = patent['patent_number']
                 patent_type = patent['patent_type']
                 app_date = patent['applications'][0]['app_date']
-                
+
                 if (patent_type != 'reissue'):
                 
                     for inventor in patent['inventors']:
