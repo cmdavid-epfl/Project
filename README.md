@@ -32,20 +32,28 @@ The PatentsView data  is available through an API, which we can access through s
 We may also use the **Stanford Patent Citations Network** to help us in the visualizations. The dataset is structured as a direct graph, showing US citations as pairs of nodes (one patent citing another) represented in two columns in a txt.file. The size and format of this dataset should not be an issue. A drawback, however, is that it only contain data for the time period 1975-1999, solely in the US. Making it potentially less suitable to answer some of the research questions.
 
 
-# A list of internal milestones for the remainder of the project
-Week 48
-- TBD
+# Files and Modules
+The project files in the repository are as follows:
+- preprocessing.ipynb
+- pipeline.py
+- analysis.ipynb
 
-Week 49
-- TBD
+## preprocessing.ipynb
+This notebook contains the details of the procedure we followed to determine the data we need to answer the research questions. To summarize :
+- We start by going through the questions and coming up with the list of features which we need to extract from the **PatentsView API**, as well as the filters we need to get the right data.
+- We then provide explanations of how we set-up the data gathering from the API and the preliminary data formatting.
+- We provide an example of the analysis that was carried out on the data to check for inconsistencies and usability.
+- Finally, we use the knowledge gathered through the above steps to come up with a data cleaning procedure.
 
-Week 50
-- TBD
+## pipeline.py
+This python file contains all the functions that resulted from the analysis carried out in the preprocessing.ipynb notebook and which are used for
+- building the query strings in the **PatentsView API** format;
+- querying and saving the data from the API;
+- cleaning the data and gathering it in a minimal number of Pandas DataFrames.
 
-Week 51 - Week 3 (2019)
-- Creation of the poster presentation
-- Printing out the poster
-- Preparing for the presentation
+## analysis.ipynb
+This notebook contains the first the outline for the data story we want to tell. For now it is mostly a discussion of the procedure we plan to follow in order to write the story. The main insight from this outline is that we will need to focus a lot of energy on making sure that the visualizations are simple yet detailed enough to succintly convey the message we want to share.
+
 
 # Questions for TAa
-TBD
+We have dropped from the project an entire block of questions which asked if it was possible to visualize the innovation centers for different industries. The main reason behind this decision is that we realized that the PatentsView database did not already contain a refined classification of the patents by specific industry. We decided that while it was certainly possible to use Machine Learning / Natural Language Processing to implement this classification ourselves using e.g. patent titles and abstracts, it would be risky (time and performance - wise) to do this. So now it turns out that the greatest technical challenge for the data story will be to create a small number of visualizations which are simple yet detailed enough to show the enormous amount of information we want to convey. We are worried though that maybe this is not enough of a technical challenge. Do you think this is sufficient for you to be able to evaluate everything it is that needs to be evaluated through this project?
