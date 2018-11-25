@@ -24,13 +24,10 @@ Answering the following questions will help us understand the dynamics of innova
 
 
 # Dataset
-We mainly plan on using the **PatentsView database**, which covers an extensive list of features for each of the patents in its database.
+We use the **PatentsView database**, which covers an extensive list of features for each of the patents in its database.
 Link: http://www.patentsview.org/api/doc.html
 
-The PatentsView data  is available through an API, which we can access through simple GET requests in Python. An extensive list of well structured information is available for each patent, though the documentation does warn that some inconsistencies are to be expected. As we would be querying for specific data directly from the API, we would not need to get redundant columns, which should help to minimize the possibilities of inconsistencies (for example, the database includes the location of the patent assignees, as well as the latitude and longitude of patent assignees, though the documentation states that these two latter variables depend directly on the first, so we should only use the location variable).
-
-We may also use the **Stanford Patent Citations Network** to help us in the visualizations. The dataset is structured as a direct graph, showing US citations as pairs of nodes (one patent citing another) represented in two columns in a txt.file. The size and format of this dataset should not be an issue. A drawback, however, is that it only contain data for the time period 1975-1999, solely in the US. Making it potentially less suitable to answer some of the research questions.
-
+The PatentsView data is available through an API, which we can access through simple GET or POST requests in Python. The procedure that we follow to extract useful data from the API is explained in the preprocessing.ipynb notebook.
 
 # Files and Modules
 The project files in the repository are as follows:
