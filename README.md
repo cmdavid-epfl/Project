@@ -52,5 +52,31 @@ This python file contains all the functions that resulted from the analysis carr
 This notebook contains the first the outline for the data story we want to tell. For now it is mostly a discussion of the procedure we plan to follow in order to write the story. The main insight from this outline is that we will need to focus a lot of energy on making sure that the visualizations are simple yet detailed enough to succintly convey the message we want to share.
 
 
+# Weekly plan until Milestone 3
+With preprocessing and cleaning steps done, we begin the three remaining weeks with the objectives of performing processing of the data to answer the questions we asked, as well as interpreting the results and visually displaying them in an attractive way. 
+
+## Week 48
+- Obtention of first results for Question 1 and its sub-parts: implementation of **Folium** maps and **HoloViews** interactive graphic depictions
+- Editing of the notebook with results from those first processing steps
+- First trials of maps visualization with **Jekyll** platform
+- Aim at the end of the week: Results and Interpretations of Q1.1 & Q1.2
+
+## Week 49
+- Implementation of Question 2 and its sub-parts: evolution through time of patent networks using **networkx** graphs for three types of organisations (companies, universities and non-governmental organisations)
+- Continuation of our data story building with **Jekyll** platform with results of Question 2 
+- Extension of the notebook with textual descriptions of Question 2 results  
+- Aim at the end of the week: Results and Interpretations of Q2.1 to Q2.5
+
+## Week 50
+- According to TAs feedback following Milestone 2 and to the evolution of our work, answering to the additional questions concerning the fields of innovation, the number of most innovating patents, the geographical zones of innovation industry and its evolution through time
+- Completion of the data story with comments on illustrated phenomena 
+- Aim at the end of the week: Handing back of the data story together with the completed notebook on Sunday 16th December 
+
+## Until poster presentation
+- Poster preparation with selection of most striking results and training for oral presentation 
+
+
 # Questions for TAs
-We have dropped from the project an entire block of questions which asked if it was possible to visualize the innovation centers for different industries. The main reason behind this decision is that we realized that the PatentsView database did not already contain a refined classification of the patents by specific industry. We decided that while it was certainly possible to use Machine Learning / Natural Language Processing to implement this classification ourselves using e.g. patent titles and abstracts, it would be risky (time and performance - wise) to do this. So now it turns out that the greatest technical challenge for the data story will be to create a small number of visualizations which are simple yet detailed enough to show the enormous amount of information we want to convey. We are worried though that maybe this is not enough of a technical challenge. Do you think this is sufficient for you to be able to evaluate everything it is that needs to be evaluated through this project?
+We have dropped from the project an entire block of questions which asked if it was possible to visualize the innovation centers for different industries. The main reason behind this decision is that we realized that the PatentsView database did not already contain a refined classification of the patents by specific industry. We decided that while it was certainly possible to use statistical measures, such as TFIDF (please refer to the end of the paragraph), or Machine Learning / Natural Language Processing to implement this classification ourselves using e.g. patent titles and abstracts, it would be risky (time and performance - wise) to do this. So now it turns out that the greatest technical challenge for the data story will be to create a small number of visualizations which are simple yet detailed enough to show the enormous amount of information we want to convey. We are worried though that maybe this is not enough of a technical challenge. Do you think this is sufficient for you to be able to evaluate everything it is that needs to be evaluated through this project? 
+
+NB: TFIDF (term frequency-inverse document frequency) method appears to be a way to extract the field of a certain patent: the main topic to which the patent is related to can be detected by looking for words that have high occurrence frequency in the so-called patent but low occurrence frequency in the whole patents dataset.
