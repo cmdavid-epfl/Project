@@ -1,5 +1,4 @@
 """ data pipeline functions """
-
 import os
 import requests
 import json
@@ -14,33 +13,33 @@ def query(app_date_from, app_date_to, patent_number, assignee_organization, assi
     
     """
     Forms query filters string to pass into get_data()
+    querying for specific patent numbers is incompatible with any other filters.
     
     Inputs
-    :app_date_*: string type, format '"YYYY-MM-DD"'
-    :patent_number / assignee_organization / assignee_type: string type, format '["key1", "key2", ...]' or '"key1"'
+    :app_date_*: string type, format 'YYYY-MM-DD'
+    :patent_number / assignee_organization / assignee_type: string type, format ['key1', 'key2', ...] or 'key1'
     
     Outputs
-    :query_str: string type, complete query stringt to pass into get_data()
-    """
-    
-    query_str = '{"_and":['
+    :query_str: string type, complete query string to pass into get_data()
+    """    
+    ands = []
     
     if (app_date_from):
-        query_str = query_str + '{"_gte":{"app_date":' + app_date_from + '}},'
+        ands.append({'_gte':{'app_date':app_date_from}})
 
     if (app_date_to):
-        query_str = query_str + '{"_lte":{"app_date":' + app_date_to + '}},'
-
-    if (patent_number):
-        query_str = query_str + '{"patent_id":' + patent_number + '},'
+        ands.append({'_lte':{'app_date':app_date_to}})
         
     if (assignee_organization):
-        query_str = query_str + '{"assignee_organization":' + assignee_organization + '},'
+        ands.append({'assignee_organization':assignee_organization})
 
     if (assignee_type):
-        query_str = query_str + '{"assignee_type":' + assignee_type + '},'
+        ands.append({'assignee_type':assignee_type})
     
-    query_str = query_str[:-1] + ']}'
+    query_str = {'_and':ands}
+    
+    if (patent_number):
+        query_str = {'patent_number':patent_number}
     
     return query_str
 
@@ -52,7 +51,7 @@ def get_data(query_str, fields_str, options, filename, filepath):
     
     Inputs
     :query_str: string type, should be output from query() function
-    :fields_str: string type, format '"field1", "field2",...'
+    :fields_str: string type, format ['field1', 'field2', ...]
     :filename: string type, data filename for the fetched data
     :filepath: string type, data folder path
     
@@ -69,18 +68,23 @@ def get_data(query_str, fields_str, options, filename, filepath):
     page = 1
     data_list = collections.defaultdict(list)
     
-    # request string needs to be a function of the page, in order to automate the process
-    request_str = lambda page : 'http://www.patentsview.org/api/patents/query?q=' + query_str + '&f=' + fields_str + '&o=' + options(page)
+    print(len(json.dumps(query_str)))
 
     # API documentation states that a query longer than 2000 characters can use post method
-    if (len(request_str(page)) > 2000):
-        payload = lambda page : {"q": query_str,
-                                 "f": fields_str,
-                                 "o": options(page)} 
-        fetch = lambda page : requests.post('http://www.patentsview.org/api/patents/query', data = payload(page))
-    else:
-        fetch = lambda page : requests.get(request_str(page))
+    if (len(json.dumps(query_str)) > 1800):
         
+        payload = lambda page : {'q': query_str,
+                                 'f': fields_str,
+                                 'o': options(page)}   
+
+        fetch = lambda page : requests.post('http://www.patentsview.org/api/patents/query', data = json.dumps(payload(page)))
+        
+    else:
+        query_str = json.dumps(query_str)
+        fields_str = json.dumps(fields_str)        
+        request_str = lambda page : 'http://www.patentsview.org/api/patents/query?q=' + query_str + '&f=' + fields_str + '&o=' + json.dumps(options(page))
+        
+        fetch = lambda page : requests.get(request_str(page))
     
     print('fetching first page')
     r = fetch(page)
@@ -122,9 +126,9 @@ def patentsviewAPI(filename, filepath = None, fields = None, app_date_from = Non
     Inputs
     :filename: string type, data filename (without extension) for the fetched data
     :filepath: string type, data folder path
-    :fields:string type, format '"field1", "field2",...'
-    :app_date_*: string type, format '"YYYY-MM-DD"'
-    :patent_number / assignee_organization / assignee_type: string type, format '["key1", "key2", ...]' or '"key1"
+    :fields:string type, format ['field1', 'field2', ...]
+    :app_date_*: string type, format 'YYYY-MM-DD'
+    :patent_number / assignee_organization / assignee_type: string type, format ['key1', 'key2', ...] or 'key1'
     
     Outputs
     :file_: string type, file path of the saved data
@@ -136,19 +140,18 @@ def patentsviewAPI(filename, filepath = None, fields = None, app_date_from = Non
     query_str = query(app_date_from, app_date_to, patent_number, assignee_organization, assignee_type)
     
     # build output fields string
-    all_fields = ('["patent_number", "assignee_latitude", "assignee_longitude",'
-                  '"cited_patent_number", "inventor_latitude", "inventor_longitude",'
-                  '"inventor_lastknown_latitude", "inventor_lastknown_longitude",'
-                  '"patent_type", "app_date", "assignee_organization", "assignee_type"]')
+    all_fields = ['patent_number', 'assignee_latitude', 'assignee_longitude','cited_patent_number',
+                  'inventor_latitude', 'inventor_longitude', 'inventor_lastknown_latitude', 
+                  'inventor_lastknown_longitude','patent_type', 'app_date', 'assignee_organization', 'assignee_type']
     
     # add extra fields, if any
     if (fields):
-        all_fields = all_fields[:-1] + ', ' + fields + ']'
+        all_fields.append(fields)
     
     # set options such that the query returns the maximum number of results per page (10,000)
     # the get_data function will take care of getting the results for all the pages,
     # though the maximum number of results per query seems to be set at (100,000) or 10 pages.
-    options = lambda page : '{"page":' + str(page) + ',"per_page":10000}'
+    options = lambda page : {'page': page, 'per_page': 10000}
     
     # fetch the data from the PatentsView API
     file_ = get_data(query_str, all_fields, options, filename, filepath)
@@ -359,5 +362,3 @@ def data_clean(file_):
               'citations' : citation_data}
     
     return output
-
-
