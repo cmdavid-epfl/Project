@@ -3,13 +3,14 @@ import os
 import requests
 import json
 import collections
+import time
 import pandas as pd
 
 """
 FUNCTIONS TO QUERY AND SAVE DATA
 """
 
-def query(app_date_from, app_date_to, patent_number, assignee_organization, assignee_type):
+def query(app_date_from, app_date_to, patent_number):
     
     """
     Forms query filters string to pass into get_data()
@@ -29,17 +30,14 @@ def query(app_date_from, app_date_to, patent_number, assignee_organization, assi
 
     if (app_date_to):
         ands.append({'_lte':{'app_date':app_date_to}})
-        
-    if (assignee_organization):
-        ands.append({'assignee_organization':assignee_organization})
-
-    if (assignee_type):
-        ands.append({'assignee_type':assignee_type})
     
     query_str = {'_and':ands}
     
     if (patent_number):
         query_str = {'patent_number':patent_number}
+        
+        if (app_date_from) or (app_date_to):
+            print('patent_number queried. other inputs ignored')
     
     return query_str
 
@@ -100,6 +98,9 @@ def get_data(query_str, fields_str, options, filename, filepath):
             # the number of results often seems to be capped at 100,000.
             if (page == 11):
                 print('page limit reached, double check data')
+                
+            time.sleep(60)
+            
             r = fetch(page)
             data_list[page] = r.json()
         else:
@@ -118,8 +119,7 @@ def get_data(query_str, fields_str, options, filename, filepath):
     return file_
 
 
-def patentsviewAPI(filename, filepath = None, fields = None, app_date_from = None, app_date_to = None, patent_number = None, 
-                   assignee_organization = None, assignee_type = None):
+def patentsviewAPI(filename, filepath = None, app_date_from = None, app_date_to = None, patent_number = None):
     """
     Build the query string parts (filters, output fields, output options) in the PatentsView API format
     
@@ -137,16 +137,15 @@ def patentsviewAPI(filename, filepath = None, fields = None, app_date_from = Non
         filename = filename + '.json'
     
     # build query string
-    query_str = query(app_date_from, app_date_to, patent_number, assignee_organization, assignee_type)
+    query_str = query(app_date_from, app_date_to, patent_number)
     
-    # build output fields string
-    all_fields = ['patent_number', 'assignee_latitude', 'assignee_longitude','cited_patent_number',
-                  'inventor_latitude', 'inventor_longitude', 'inventor_lastknown_latitude', 
-                  'inventor_lastknown_longitude','patent_type', 'app_date', 'assignee_organization', 'assignee_type']
-    
-    # add extra fields, if any
-    if (fields):
-        all_fields.append(fields)
+    if (app_date_from) and (app_date_to):
+        all_fields = ['assignee_latitude', 'assignee_longitude','cited_patent_number',
+                      'inventor_latitude', 'inventor_longitude', 'patent_type', 'app_date',
+                      'assignee_organization', 'assignee_type']
+        
+    else:
+        all_fields = ['cited_patent_number','inventor_latitude','inventor_longitude', 'patent_type']
     
     # set options such that the query returns the maximum number of results per page (10,000)
     # the get_data function will take care of getting the results for all the pages,
@@ -158,105 +157,109 @@ def patentsviewAPI(filename, filepath = None, fields = None, app_date_from = Non
 
     return file_
 
+
 """
 FUNCTIONS TO PRE-PROCESS DATA
 """
-
-def counter_to_pandas(counter_object):
-    """Function to convert the counter objects used in the data processing (json_to_pandas function) into Pandas DataFrame"""
-    df = pd.DataFrame(data = list(counter_object.values()),index=counter_object.keys(), columns=['count'])
-    df.sort_values(by=['count'],inplace=True,ascending=False)
+def load_layers(file_):
     
-    return df
-
-
-def json_to_pandas(file_):
-    """
-    Converts saved json data from file to a predefined format. (see data_preprocessing.ipynb)
-
-    Input
-    :file_: path to file containing the json data
-
-    Output
-    :output: set of Pandas DataFrames containing the data in a predefined format.
-    """
-    # load json data file
-    json_data = json.load(open(file_))
+    data = json.load(open(file_))
     
-    # for certain data, we only need their distribution. To this end, we use Collections Counter objects
-    assignee_type = collections.Counter()
-    assignee_organization = collections.Counter()
-    cited_patent_number = collections.Counter()
-    patent_type = collections.Counter()
+    for layer in data:
+        data[layer]['inventors'] = pd.read_json(data[layer]['inventors'])
     
-    # for the rest of the data, we want to collect all of it and transfer it into Pandas Dataframes
-    patent_number = []
-    app_date = []
+    return data
+    
+
+def get_layers_data(filename, filepath, patent_number, layers):
+    
+    if (filename[-5:] == '.json'):
+        filename = filename[:-5]
+    
+    filenames = [filename + '_layer' + str(q) + '.json' for q in range(layers)]
+    output_data = {}
+    
+    for i,file_ in enumerate(filenames):
+        print(filepath,file_)
+        if os.path.isfile(os.path.join(filepath,file_)):
+            datafile = os.path.join(filepath,file_)
+            print('already on file')
+        else:
+            datafile = get_cited_patents_data(file_, filepath, patent_number)
+        
+        cited_patents, inventors = load_layer_data(datafile)
+        
+        output_data[i] = {'cited_patents' : cited_patents,
+                          'inventors' : inventors.to_json()}
+        
+        patent_number = cited_patents.copy()
+        
+    # save data
+    print('saving data')
+    file_ = os.path.join(filepath,filename + '.json')
+    with open(file_, 'w') as f:
+        json.dump(output_data, f)
+        
+    return file_
+
+
+def get_cited_patents_data(filename, filepath, patent_numbers):
+    
+    data = {}
+    i = 0
+    while ((i+1)*100 < len(patent_numbers)):
+        datafile = patentsviewAPI('temp.json', filepath, patent_number = patent_numbers[i*100:(i+1)*100])
+        data[i] = json.load(open(datafile))
+        i += 1
+
+    datafile = patentsviewAPI('temp.json', filepath, patent_number = patent_numbers[i*100:])
+    data[i] = json.load(open(datafile))
+    
+    file_ = os.path.join(filepath,filename)
+    
+    with open(file_, 'w') as f:
+        json.dump(data, f)
+    
+    return file_
+
+
+def load_layer_data(file_):
+
+    cited_patent_list = []
+    inventor_key_id = []
     inventor_latitude = []
     inventor_longitude = []
-    inventor_lastknown_latitude = []
-    inventor_lastknown_longitude = []
-    assignee_latitude = []
-    assignee_longitude = []
-    assignee_patent_number = []
-    inventor_patent_number = []
     
-    # parse json data and fill above objects 
-    for page in json_data:
-        if (json_data[page]['patents'] != None):
-            for patent in json_data[page]['patents']:
-                patent_number.append(patent['patent_number'])
-                patent_type[patent['patent_type']] += 1
-
-                for inventor in patent['inventors']:
-                    inventor_latitude.append(inventor['inventor_latitude'])
-                    inventor_longitude.append(inventor['inventor_longitude'])
-                    inventor_lastknown_latitude.append(inventor['inventor_lastknown_latitude'])
-                    inventor_lastknown_longitude.append(inventor['inventor_lastknown_longitude'])
-                    inventor_patent_number.append(patent['patent_number'])
-
-                for assignee in patent['assignees']:
-                    assignee_latitude.append(assignee['assignee_latitude'])
-                    assignee_longitude.append(assignee['assignee_longitude'])
-                    assignee_type[assignee['assignee_type']] += 1
-                    assignee_organization[assignee['assignee_organization']] += 1
-                    assignee_patent_number.append(patent['patent_number'])
-
-                for application in patent['applications']:
-                    app_date.append(application['app_date'])
-
-                for cit_patent in patent['cited_patents']:
-                    cited_patent_number[cit_patent['cited_patent_number']] += 1
-        else:
-            print('error: empty page')
-
-    # output formats
-    app_date = pd.DataFrame(data = {'app_date' : app_date}, index = patent_number)
-    patent_type_df = counter_to_pandas(patent_type)
-    assignee_type_df = counter_to_pandas(assignee_type)
-    assignee_organization_df = counter_to_pandas(assignee_organization)
-    cited_patent_number_df = counter_to_pandas(cited_patent_number)
+    json_data = json.load(open(file_))
     
-    inventor_location = pd.DataFrame(data = {'lat' : inventor_latitude,
-                                             'lon' : inventor_longitude}, index = inventor_patent_number)
-    inventor_lastknown_location = pd.DataFrame(data = {'lat' : inventor_lastknown_latitude,
-                                                       'lon' : inventor_lastknown_longitude}, index = inventor_patent_number)
-    assignee_location = pd.DataFrame(data = {'lat' : assignee_latitude,
-                                             'lon' : assignee_longitude}, index = assignee_patent_number)
-    
-    output = {'date':app_date,
-              'patent_type':patent_type_df,
-              'assignee_type': assignee_type_df,
-              'assignee_organization': assignee_organization_df,
-              'cited_patent_number': cited_patent_number_df,
-              'inventor_location': inventor_location,
-              'inventor_lastknown_location': inventor_lastknown_location,
-              'assignee_location': assignee_location}
-    
-    return output
+    for fold in json_data:
+
+        for page in json_data[fold]:
+                
+            for patent in json_data[fold][page]['patents']:
+                
+                if (patent['patent_type'] != 'reissue'):
+                    
+                    for inventor in patent['inventors']:
+                        lat = inventor['inventor_latitude']
+                        lon = inventor['inventor_longitude']
+                        if (lat != '0.1') and (lat != None) and (inventor['inventor_key_id'] not in inventor_key_id) :
+                            inventor_key_id.append(inventor['inventor_key_id'])
+                            inventor_latitude.append(float(lat))
+                            inventor_longitude.append(float(lon))
+
+                    for cit_patent in patent['cited_patents']:
+                        cit_pat_num = cit_patent['cited_patent_number']
+                        if (cit_pat_num != None):
+                            cited_patent_list.append(cit_pat_num)
+                                    
+    inventor_info = pd.DataFrame(data = {'latitude' : inventor_latitude,
+                                         'longitude' : inventor_longitude}, index = inventor_key_id)
+ 
+    return cited_patent_list, inventor_info
 
 
-def data_clean(file_):
+def load_preprocessed_data(files):
     """
     Converts saved json data from file to the cleaned format used for the data analysis. (see data_preprocessing.ipynb)
 
@@ -270,95 +273,110 @@ def data_clean(file_):
      - patents: Collection containing the data related to patents.
      - citations: Pandas DataFrame containing the citations data for each patent in the dataset
     """
-    # load json data file
-    json_data = json.load(open(file_))
-    
-    # data objects
+
     assignee_key_id = []
     assignee_type = []
     assignee_org = []
-    assignee_location = []
-    
+    assignee_latitude = []
+    assignee_longitude = []
+        
     inventor_key_id = []
-    inventor_location = []
-    inventor_last_location = []
-    
-    patent_data = {}
-    
-    cited_patent_number = collections.Counter()
-    
-    # parse json data and fill above collections 
-    for page in json_data:
-        # when query limit is reached, the results are empty pages
-        if (json_data[page]['patents'] != None):
-            for patent in json_data[page]['patents']:
+    inventor_latitude = []
+    inventor_longitude = []
+    inventor_assignee_key = []
+        
+    total_cited_patents_count = 0
+    patent_type_count = collections.Counter()
+
+    # parse json data and fill above objects
+    for file_ in files: 
+        # load json data file
+        json_data = json.load(open(file_))
+
+        for page in json_data:
+            # when query limit is reached, the results are empty pages
+            if (json_data[page]['patents'] != None):
                 
-                patent_assignees = []
-                patent_inventors = []
-                patent_number = patent['patent_number']
-                patent_type = patent['patent_type']
-                app_date = patent['applications'][0]['app_date']
+                for patent in json_data[page]['patents']:
+                    patent_type = patent['patent_type']
 
-                if (patent_type != 'reissue'):
-                
-                    for inventor in patent['inventors']:
-                        lat = inventor['inventor_latitude']
-                        lon = inventor['inventor_longitude']
-                        l_lat = inventor['inventor_lastknown_latitude']
-                        l_lon = inventor['inventor_lastknown_longitude']
-
-                        if (lat != '0.1') and (lat != None) and (l_lat != '0.1') and (l_lat != None):
-                            inventor_key_id.append(inventor['inventor_key_id'])
-                            inventor_location.append((float(lat), float(lon)))
-                            inventor_last_location.append((float(l_lat), float(l_lon)))
-
-                            patent_inventors.append(inventor['inventor_key_id'])
-
-                    for assignee in patent['assignees']:
-                        type_ = assignee['assignee_type']
-                        org = assignee['assignee_organization']
-                        lat = assignee['assignee_latitude']
-                        lon = assignee['assignee_longitude']
-
-                        if (lat != '0.1') and (lat != None) and (type_ != None):
-                            assignee_key_id.append(assignee['assignee_key_id'])
-                            assignee_type.append(type_)
-                            assignee_org.append(org)
-                            assignee_location.append((float(lat), float(lon)))
-
-                            patent_assignees.append(assignee['assignee_key_id'])
-
-                    for cit_patent in patent['cited_patents']:
-                        cit_pat_num = cit_patent['cited_patent_number']
-
-                        if (cit_pat_num != None):
-                            cited_patent_number[cit_patent['cited_patent_number']] += 1
-
-                    if (len(patent_inventors) != 0):
-                        patent_data[patent_number] = {'type' : patent_type,
-                                                      'date' : app_date,
-                                                      'inventors' : patent_inventors,
-                                                      'assignees' : patent_assignees}
-        else:
-            print('error: empty page')
+                    if (patent_type != 'reissue'):
+                        patent_type_count[patent_type] += 1
+                        
+                        for assignee in patent['assignees']:
+                            type_ = assignee['assignee_type']
+                            org = assignee['assignee_organization']
+                            lat = assignee['assignee_latitude']
+                            lon = assignee['assignee_longitude']
+                            assignee_key = assignee['assignee_key_id']
+                            if (lat != '0.1') and (lat != None) and (type_ != None):
+                                assignee_key_id.append(assignee_key)
+                                assignee_type.append(type_)
+                                assignee_org.append(org)
+                                assignee_latitude.append(float(lat))
+                                assignee_longitude.append(float(lon))
+                        
+                        for inventor in patent['inventors']:
+                            lat = inventor['inventor_latitude']
+                            lon = inventor['inventor_longitude']
+                            if (lat != '0.1') and (lat != None):
+                                inventor_key_id.append(inventor['inventor_key_id'])
+                                inventor_latitude.append(float(lat))
+                                inventor_longitude.append(float(lon))
+                                inventor_assignee_key.append(assignee_key)
+                                
+                        for cit_patent in patent['cited_patents']:
+                            if (cit_patent['cited_patent_number'] != None):
+                                total_cited_patents_count += 1
+                        
+            else:
+                print('error: empty page')
 
 
     # output formats
-    assignee_data = pd.DataFrame(data = {'type' : assignee_type,
+    assignee_info = pd.DataFrame(data = {'type' : assignee_type,
                                          'organization' : assignee_org,
-                                         'location' : assignee_location}, index = assignee_key_id)
-    inventor_data = pd.DataFrame(data = {'location' : inventor_location,
-                                         'last_location' : inventor_last_location}, index = inventor_key_id)
+                                         'latitude' : assignee_latitude,
+                                         'longitude' : assignee_longitude}, index = assignee_key_id)
+    inventor_info = pd.DataFrame(data = {'latitude' : inventor_latitude,
+                                         'longitude' : inventor_longitude,
+                                         'assignee' : inventor_assignee_key}, index = inventor_key_id)
     
-    assignee_data.drop_duplicates(inplace=True)
-    inventor_data.drop_duplicates(inplace=True)
+    proportion_assignee_type_df = assignee_info.groupby(by='type').size().reset_index()
+    proportion_assignee_type_df.set_index('type',inplace=True)
     
-    patent_data = pd.DataFrame(patent_data)
-    citation_data = counter_to_pandas(cited_patent_number)
+    assignee_info.drop_duplicates(inplace=True)
     
-    output = {'assignees' : assignee_data,
-              'inventors' : inventor_data,
-              'patents' : patent_data.T,
-              'citations' : citation_data}
+    patent_type_count_df = pd.DataFrame.from_dict(patent_type_count, orient='index').reset_index()
+    patent_type_count_df.set_index('index', inplace = True)
+
+    # assignee_type_count = assignees.groupby(key='type').size().reset_index()
+    
+    output = {'proportion_by_patent_type' : patent_type_count_df / sum(patent_type_count_df.values),
+              'proportion_by_assignee_type' : proportion_assignee_type_df / sum(proportion_assignee_type_df.values),
+              'num_patents' : sum(patent_type_count_df.values)[0],
+              'num_citations' : total_cited_patents_count,
+              'num_inventors' : len(inventor_info.index.unique()),
+              'inventors' : inventor_info,
+              'assignees' : assignee_info}
     
     return output
+
+def get_full_year_data(year, filepath):
+    
+    filenames = [year + q for q in ['q1','q2','q3','q4']]
+    date_from = [year + '-' + date for date in ['01-01','04-01','07-01','10-01']]
+    date_to = [year + '-' + date for date in ['03-31','06-30','09-30','12-31']]
+
+    output_datafiles = []
+    
+    for i,filename in enumerate(filenames):
+        print(filepath,filename)
+        if os.path.isfile(os.path.join(filepath,filename + '.json')):
+            datafile = os.path.join(filepath,filename + '.json')
+            print('already on file')
+        else:
+            datafile = patentsviewAPI(filename, filepath = filepath, app_date_from = date_from[i], app_date_to = date_to[i])
+        output_datafiles.append(datafile)
+        
+    return output_datafiles
