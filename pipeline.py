@@ -99,7 +99,7 @@ def get_data(query_str, fields_str, options, filename, filepath):
             if (page == 11):
                 print('page limit reached, double check data')
                 
-            time.sleep(60)
+            time.sleep(600)
             
             r = fetch(page)
             data_list[page] = r.json()
@@ -141,7 +141,7 @@ def patentsviewAPI(filename, filepath = None, app_date_from = None, app_date_to 
     
     if (app_date_from) and (app_date_to):
         all_fields = ['assignee_latitude', 'assignee_longitude','cited_patent_number',
-                      'inventor_latitude', 'inventor_longitude', 'patent_type', 'app_date',
+                      'inventor_latitude', 'inventor_longitude', 'patent_type',
                       'assignee_organization', 'assignee_type']
         
     else:
