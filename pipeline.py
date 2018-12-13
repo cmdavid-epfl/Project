@@ -5,6 +5,7 @@ import json
 import collections
 import time
 import pandas as pd
+import numpy as np
 
 """
 FUNCTIONS TO QUERY AND SAVE DATA
@@ -99,7 +100,7 @@ def get_data(query_str, fields_str, options, filename, filepath):
             if (page == 11):
                 print('page limit reached, double check data')
                 
-            time.sleep(600)
+            time.sleep(60)
             
             r = fetch(page)
             data_list[page] = r.json()
@@ -140,8 +141,7 @@ def patentsviewAPI(filename, filepath = None, app_date_from = None, app_date_to 
     query_str = query(app_date_from, app_date_to, patent_number)
     
     if (app_date_from) and (app_date_to):
-        all_fields = ['assignee_latitude', 'assignee_longitude','cited_patent_number',
-                      'inventor_latitude', 'inventor_longitude', 'patent_type',
+        all_fields = ['cited_patent_number', 'inventor_latitude', 'inventor_longitude', 'patent_type',
                       'assignee_organization', 'assignee_type']
         
     else:
@@ -161,7 +161,9 @@ def patentsviewAPI(filename, filepath = None, app_date_from = None, app_date_to 
 """
 FUNCTIONS TO PRE-PROCESS DATA
 """
-def load_layers(file_):
+def load_layers_data(filename, patent_number, layers, data_dir):
+    
+    file_ = get_layers_data(filename, data_dir, patent_number, layers)
     
     data = json.load(open(file_))
     
@@ -187,7 +189,7 @@ def get_layers_data(filename, filepath, patent_number, layers):
         else:
             datafile = get_cited_patents_data(file_, filepath, patent_number)
         
-        cited_patents, inventors = load_layer_data(datafile)
+        cited_patents, inventors = preprocess_layer_data(datafile)
         
         output_data[i] = {'cited_patents' : cited_patents,
                           'inventors' : inventors.to_json()}
@@ -198,7 +200,7 @@ def get_layers_data(filename, filepath, patent_number, layers):
     print('saving data')
     file_ = os.path.join(filepath,filename + '.json')
     with open(file_, 'w') as f:
-        json.dump(output_data, f)
+        json.dump(output_data, f,ensure_ascii=False)
         
     return file_
 
@@ -223,7 +225,7 @@ def get_cited_patents_data(filename, filepath, patent_numbers):
     return file_
 
 
-def load_layer_data(file_):
+def preprocess_layer_data(file_):
 
     cited_patent_list = []
     inventor_key_id = []
@@ -275,23 +277,22 @@ def load_preprocessed_data(files):
     """
 
     assignee_key_id = []
-    assignee_type = []
     assignee_org = []
-    assignee_latitude = []
-    assignee_longitude = []
-        
-    inventor_key_id = []
-    inventor_latitude = []
-    inventor_longitude = []
-    inventor_assignee_key = []
-        
-    total_cited_patents_count = 0
+    assignee_inventor_locations = []
+    assignee_cited_patents_count = []
+    assignee_patents_count = []
+    assignee_type = []
+    
+    total_inventor_count = collections.Counter()
+    total_location_count = collections.Counter()
+    total_cited_patents_count = collections.Counter()
     patent_type_count = collections.Counter()
 
     # parse json data and fill above objects
     for file_ in files: 
+        print(file_)
         # load json data file
-        json_data = json.load(open(file_))
+        json_data = json.load(open(file_, encoding = 'utf-8'))
 
         for page in json_data:
             # when query limit is reached, the results are empty pages
@@ -300,64 +301,68 @@ def load_preprocessed_data(files):
                 for patent in json_data[page]['patents']:
                     patent_type = patent['patent_type']
 
-                    if (patent_type != 'reissue'):
+                    if (patent_type != 'reissue') and (patent_type != None) and (patent_type != ''):
                         patent_type_count[patent_type] += 1
+                        add_assignees = []
                         
                         for assignee in patent['assignees']:
-                            type_ = assignee['assignee_type']
-                            org = assignee['assignee_organization']
-                            lat = assignee['assignee_latitude']
-                            lon = assignee['assignee_longitude']
-                            assignee_key = assignee['assignee_key_id']
-                            if (lat != '0.1') and (lat != None) and (type_ != None):
-                                assignee_key_id.append(assignee_key)
-                                assignee_type.append(type_)
-                                assignee_org.append(org)
-                                assignee_latitude.append(float(lat))
-                                assignee_longitude.append(float(lon))
-                        
+                            assignee_id = assignee['assignee_key_id']
+                            if (assignee_id not in assignee_key_id) and (assignee_id):
+                                assignee_key_id.append(assignee_id)
+                                assignee_type.append(assignee['assignee_type'])
+                                assignee_org.append(assignee['assignee_organization'])
+                                assignee_inventor_locations.append(collections.Counter())
+                                assignee_cited_patents_count.append(0)
+                                assignee_patents_count.append(0)
+                            if (assignee_id):
+                                add_assignees.append(assignee_id)
+                                assignee_patents_count[assignee_key_id.index(assignee_id)] += 1
+                            
                         for inventor in patent['inventors']:
                             lat = inventor['inventor_latitude']
                             lon = inventor['inventor_longitude']
-                            if (lat != '0.1') and (lat != None):
-                                inventor_key_id.append(inventor['inventor_key_id'])
-                                inventor_latitude.append(float(lat))
-                                inventor_longitude.append(float(lon))
-                                inventor_assignee_key.append(assignee_key)
+                            if (lat != '0.1') and (lat != None) and (inventor['inventor_key_id']):
+                                inventor_locations = collections.Counter()
+                                inventor_locations[(float(lat), float(lon))] += 1
+                                total_location_count[(float(lat), float(lon))] += 1
+                                total_inventor_count[inventor['inventor_key_id']] = 1
                                 
+                        for assignee in add_assignees:
+                            assignee_inventor_locations[assignee_key_id.index(assignee)] += inventor_locations
+                            
                         for cit_patent in patent['cited_patents']:
-                            if (cit_patent['cited_patent_number'] != None):
-                                total_cited_patents_count += 1
-                        
+                            cited_patents_count = 0
+                            if (cit_patent['cited_patent_number']):
+                                total_cited_patents_count[cit_patent['cited_patent_number']] = 1
+                                cited_patents_count += 1
+
+                        for assignee in add_assignees:
+                            assignee_cited_patents_count[assignee_key_id.index(assignee)] += cited_patents_count
+                            
             else:
                 print('error: empty page')
-
-
+    
     # output formats
-    assignee_info = pd.DataFrame(data = {'type' : assignee_type,
-                                         'organization' : assignee_org,
-                                         'latitude' : assignee_latitude,
-                                         'longitude' : assignee_longitude}, index = assignee_key_id)
-    inventor_info = pd.DataFrame(data = {'latitude' : inventor_latitude,
-                                         'longitude' : inventor_longitude,
-                                         'assignee' : inventor_assignee_key}, index = inventor_key_id)
-    
-    proportion_assignee_type_df = assignee_info.groupby(by='type').size().reset_index()
-    proportion_assignee_type_df.set_index('type',inplace=True)
-    
-    assignee_info.drop_duplicates(inplace=True)
+    assignee_info = pd.DataFrame(data = {'organization' : assignee_org,
+                                         'type' : assignee_type,
+                                         'inventors_loc' : assignee_inventor_locations,
+                                         'patents' : assignee_patents_count,
+                                         'citations' : assignee_cited_patents_count}, index = assignee_key_id)
+    assignee_info.sort_values(by = 'patents', ascending=False, inplace=True)
     
     patent_type_count_df = pd.DataFrame.from_dict(patent_type_count, orient='index').reset_index()
-    patent_type_count_df.set_index('index', inplace = True)
-
-    # assignee_type_count = assignees.groupby(key='type').size().reset_index()
+    patent_type_count_df.set_index('index', inplace=True)
     
-    output = {'proportion_by_patent_type' : patent_type_count_df / sum(patent_type_count_df.values),
-              'proportion_by_assignee_type' : proportion_assignee_type_df / sum(proportion_assignee_type_df.values),
+    total_location_count_df = pd.DataFrame.from_dict(total_location_count, orient='index').reset_index()
+    total_location_count_df.set_index('index', inplace=True)
+    
+    #inventor_info.drop_duplicates(subset=['latitude','longitude'])[['latitude','longitude']].values
+
+    output = {'num_by_patent_type' : patent_type_count_df / sum(patent_type_count_df.values),
+              'locations' : total_location_count_df,
               'num_patents' : sum(patent_type_count_df.values)[0],
-              'num_citations' : total_cited_patents_count,
-              'num_inventors' : len(inventor_info.index.unique()),
-              'inventors' : inventor_info,
+              'num_citations' : len(total_cited_patents_count),
+              'num_inventors' : len(total_inventor_count),
               'assignees' : assignee_info}
     
     return output
@@ -380,3 +385,41 @@ def get_full_year_data(year, filepath):
         output_datafiles.append(datafile)
         
     return output_datafiles
+
+
+def get_ts(full_year_data):
+    
+    num_patents_ts = []
+    num_inventors_ts = []
+    num_individuals_ts = []
+    num_citations_ts = []
+    num_utility_patents_ts = []
+    num_design_patents_ts = []
+    
+    for year in full_year_data:
+        num_patents_ts.append(full_year_data[year]['num_patents'])
+        num_inventors_ts.append(full_year_data[year]['num_inventors'])
+        num_citations_ts.append(full_year_data[year]['num_citations'])
+        num_utility_patents_ts.append(full_year_data[year]['num_by_patent_type'].loc['utility'] * num_patents_ts[-1])
+        num_design_patents_ts.append(full_year_data[year]['num_by_patent_type'].loc['design'] * num_patents_ts[-1])
+        num_individuals_ts.append(len(full_year_data[year]['assignees'].query("type == '4' | type == '5'")))
+        
+    num_patents_ts = np.array(num_patents_ts).flatten() / 1000
+    num_inventors_ts = np.array(num_inventors_ts).flatten() / 1000
+    num_citations_ts = np.array(num_citations_ts).flatten() / 1000
+    num_utility_patents_ts = np.array(num_utility_patents_ts).flatten() / 1000
+    num_design_patents_ts = np.array(num_design_patents_ts).flatten() / 1000
+    num_individuals_ts = np.array(num_individuals_ts).flatten()
+    
+    return num_patents_ts, num_inventors_ts, num_citations_ts, num_utility_patents_ts, num_design_patents_ts, num_individuals_ts
+    
+    
+def load_data(year_range, data_dir):
+
+    full_year_data = {}
+
+    for year in year_range:
+        datafiles = get_full_year_data(str(year), data_dir)
+        full_year_data[str(year)] = load_preprocessed_data(datafiles)
+
+    return full_year_data
