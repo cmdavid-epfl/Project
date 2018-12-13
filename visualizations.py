@@ -14,10 +14,11 @@ def get_top_k_locations(data, k):
     
     assignees = data[['organization', 'patents']].values[:k,:]
     loc_counters = data['inventors_loc'].values[:k]
-    num_inventors = sum(loc_counters.values())
+    num_inventors = 0
     locations = Counter()
     
     for counter in loc_counters:
+        num_inventors += sum(counter.values())
         locations += counter
     
     locations = np.hstack([np.array(list(locations.keys())), 
@@ -45,10 +46,10 @@ def get_png(full_year_data, viz, year, k = None, zoom_on = None) :
     radius = 5
     min_opacity = 0.2
     max_val = 1
-    show = [True, False]
+
     if (zoom_on):
         center = (zoom_on[0], zoom_on[1])
-        zoom_start = zoom_on[3]
+        zoom_start = zoom_on[2]
     else:
         center = (30,15)
         zoom_start = 1.75
@@ -66,7 +67,7 @@ def get_png(full_year_data, viz, year, k = None, zoom_on = None) :
         else:
             locations = get_all_locations(full_year_data[str(year)]['locations'])
 
-        plugins.HeatMap(locations, radius = radius, blur = blur, show = show,
+        plugins.HeatMap(locations, radius = radius, blur = blur, show = True,
                         min_opacity = min_opacity, max_val = max_val).add_to(map_)
                     
     else:
@@ -83,8 +84,8 @@ def get_png(full_year_data, viz, year, k = None, zoom_on = None) :
             # save dataframe to csv
             df.to_csv(viz + '_' + str(year) + '.csv')
         
-        plugins.HeatMap(locations, radius = radius, blur = blur, name = layer_name, show = show[i],
-                        min_opacity = min_opacity + 0.2, max_val = max_val).add_to(map_)
+            plugins.HeatMap(locations, radius = radius, blur = blur, show = True,
+                            min_opacity = min_opacity + 0.2, max_val = max_val).add_to(map_)
 
     # save map to html file
     map_.save(viz + '_' + str(year) + '.html')
@@ -131,7 +132,7 @@ def save_layers(layers_data, name, zoom_on = None, layered = True):
         map_.save(name + '.html')
 
 
-def get_timeseries_fig(full_year_data, num_inventors_top_10_us, num_inventors_top_10_nonus):
+def get_timeseries_fig(full_year_data, year_range, num_inventors_top_10_us, num_inventors_top_10_nonus):
     
     patents_ts, inventors_ts, citations_ts, utility_ts, design_ts, individuals_ts = get_ts(full_year_data)
     
@@ -139,11 +140,13 @@ def get_timeseries_fig(full_year_data, num_inventors_top_10_us, num_inventors_to
     
     # ADD NUM INVENTORS FOR TOP K ASSIGNEES TIME SERIES + NUM INDIVIDUALS 
     
-    gs = gridspec.GridSpec(4, 2, wspace=0.5, hspace=0, height_ratios=[1, 0.75, 0.75]) # 5x2 grid
+    gs = gridspec.GridSpec(5, 2, wspace=0.5, hspace=0, height_ratios=[1, 1, 0.75, 0.75, 0.5]) # 5x2 grid
     ax0 = fig.add_subplot(gs[0, :]) # utility vs design vs other patents
     ax1 = fig.add_subplot(gs[1, :]) # all inventors
-    ax2 = fig.add_subplot(gs[2, :]) # inventors for top k assignees (us vs nonus) vs individual assignees
+    ax2 = fig.add_subplot(gs[2, :]) # inventors for top k assignees (us vs nonus)
     ax3 = fig.add_subplot(gs[3, :]) # citations
+    ax4 = fig.add_subplot(gs[4, :]) # number of individual assignees
+    
     ax0.set_title("All Numbers in [000's]", size = 20)
 
     # BASE PATENTS
@@ -152,31 +155,37 @@ def get_timeseries_fig(full_year_data, num_inventors_top_10_us, num_inventors_to
                   labels = ['Number of Utility Patents', ' Design Patents', 'Other Patents'])
 
     # INVENTORS
-    ax1.plot(year_range, inventors_ts, linewidth = 2, color = '#CCE9FF', label = 'Number of Total Inventors')
+    ax1.plot(year_range, inventors_ts, linewidth = 2, color = '#7E1137', label = 'Number of Total Inventors')
     
     # INVENTORS categories
-    ax2.plot(year_range, num_inventors_top_10_us, linewitdh = 2, color = '#377EB8', label = 'Inventors - top 10 US Assignees')
+    ax2.plot(year_range, num_inventors_top_10_us, linewidth = 2, color = '#377EB8', label = 'Inventors - top 10 US Assignees')
     ax2.plot(year_range, num_inventors_top_10_nonus, linewidth = 2, color = '#55BA87', label = 'top 10 Non-US Assignees')
-    ax2.plot(year_range, individuals_ts, linewidth = 2, color = '#7E1137', label = 'Individuals')
     
     # CITATIONS
-    ax3.plot(year_range, citations_ts, linewidth = 2, color = '#DEFFEE')
+    ax3.plot(year_range, citations_ts, linewidth = 2, color = '#377EB8', label = 'Total Number of Citations by All Patents')
+    
+    # INDIVIDUAL ASSIGNEES
+    ax4.plot(year_range, individuals_ts, linewidth = 2, color = '#55BA87', label = 'Number of Individuals as Assignees [in units]')
     
     # FORMAT PLOTS
     ax1.yaxis.tick_right()
     ax3.yaxis.tick_right()
-    ax3.set_xticks(year_range)
+    ax4.set_xticks(year_range)
 
     # despine
-    for i, a in enumerate([ax0, ax1, ax2, ax3]):
-        a.grid(axis = 'y')
+    for i, a in enumerate([ax0, ax1, ax2, ax3, ax4]):
+        if i != 4:
+            a.set_xticks([])
+        a.grid(axis = 'y', which = 'major')
         a.tick_params(axis='y', which='both',length=0)
         leg = a.legend(prop = {'size' : 14}, frameon = False, loc = 2)
         leg.get_frame().set_linewidth(0.0)
         for spine in ["top", "right", "bottom"]:
             a.spines[spine].set_visible(False)
+            
+    plt.locator_params(axis='x', nbins=12)
                 
     fig.set_size_inches(14,12)
     
     # save plot
-    plt.show()
+    plt.savefig('tsplot.png', format='png', transparent=True, bbox_inches='tight')
