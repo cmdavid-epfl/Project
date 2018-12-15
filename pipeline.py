@@ -1,11 +1,12 @@
 """ data pipeline functions """
+
+import pandas as pd
+import numpy as np
 import os
 import requests
 import json
 import collections
 import time
-import pandas as pd
-import numpy as np
 
 """
 FUNCTIONS TO QUERY AND SAVE DATA
@@ -15,24 +16,24 @@ def query(app_date_from, app_date_to, patent_number):
     
     """
     Forms query filters string to pass into get_data()
-    querying for specific patent numbers is incompatible with any other filters.
+    There are two types of queries that are implemented:
+    1) all patents from app_date_from to app_date_to
+    2) specific patent_number
+    Specifying arguments for the first type will render arguments for the second type moot
+    
+    See PatentsView API query language documentation for more information on how the query string needs to be built
     
     Inputs
     :app_date_*: string type, format 'YYYY-MM-DD'
-    :patent_number / assignee_organization / assignee_type: string type, format ['key1', 'key2', ...] or 'key1'
+    :patent_number: string type, format ['key1', 'key2', ...] or 'key1'
     
     Outputs
     :query_str: string type, complete query string to pass into get_data()
     """    
-    ands = []
     
-    if (app_date_from):
-        ands.append({'_gte':{'app_date':app_date_from}})
-
-    if (app_date_to):
-        ands.append({'_lte':{'app_date':app_date_to}})
-    
-    query_str = {'_and':ands}
+    if (app_date_from) and (app_date_to):
+        query_str = {'_and':[{'_gte':{'app_date':app_date_from}},
+                             {'_lte':{'app_date':app_date_to}}]}
     
     if (patent_number):
         query_str = {'patent_number':patent_number}
@@ -51,6 +52,7 @@ def get_data(query_str, fields_str, options, filename, filepath):
     Inputs
     :query_str: string type, should be output from query() function
     :fields_str: string type, format ['field1', 'field2', ...]
+    :options: string type, options specifying the type of output from PatentsView API
     :filename: string type, data filename for the fetched data
     :filepath: string type, data folder path
     
@@ -66,12 +68,10 @@ def get_data(query_str, fields_str, options, filename, filepath):
 
     page = 1
     data_list = collections.defaultdict(list)
-    
-    print(len(json.dumps(query_str)))
 
     # API documentation states that a query longer than 2000 characters can use post method
     if (len(json.dumps(query_str)) > 1800):
-        
+        # POST METHOD
         payload = lambda page : {'q': query_str,
                                  'f': fields_str,
                                  'o': options(page)}   
@@ -79,6 +79,7 @@ def get_data(query_str, fields_str, options, filename, filepath):
         fetch = lambda page : requests.post('http://www.patentsview.org/api/patents/query', data = json.dumps(payload(page)))
         
     else:
+        # GET METHOD        
         query_str = json.dumps(query_str)
         fields_str = json.dumps(fields_str)        
         request_str = lambda page : 'http://www.patentsview.org/api/patents/query?q=' + query_str + '&f=' + fields_str + '&o=' + json.dumps(options(page))
@@ -99,7 +100,7 @@ def get_data(query_str, fields_str, options, filename, filepath):
             # the number of results often seems to be capped at 100,000.
             if (page == 11):
                 print('page limit reached, double check data')
-                
+            # this proved to be enough time between requests in order to not get a 104 (connection reset by peer) error
             time.sleep(60)
             
             r = fetch(page)
@@ -127,12 +128,11 @@ def patentsviewAPI(filename, filepath = None, app_date_from = None, app_date_to 
     Inputs
     :filename: string type, data filename (without extension) for the fetched data
     :filepath: string type, data folder path
-    :fields:string type, format ['field1', 'field2', ...]
     :app_date_*: string type, format 'YYYY-MM-DD'
-    :patent_number / assignee_organization / assignee_type: string type, format ['key1', 'key2', ...] or 'key1'
+    :patent_number: string type, format ['key1', 'key2', ...] or 'key1'
     
     Outputs
-    :file_: string type, file path of the saved data
+    :file_: string type, full file path of the saved data
     """
     if (filename[-5:] != '.json'):
         filename = filename + '.json'
@@ -140,10 +140,10 @@ def patentsviewAPI(filename, filepath = None, app_date_from = None, app_date_to 
     # build query string
     query_str = query(app_date_from, app_date_to, patent_number)
     
+    # See Methodology notebook for the choice of output fields
     if (app_date_from) and (app_date_to):
         all_fields = ['cited_patent_number', 'inventor_latitude', 'inventor_longitude', 'patent_type',
                       'assignee_organization', 'assignee_type']
-        
     else:
         all_fields = ['cited_patent_number','inventor_latitude','inventor_longitude', 'patent_type']
     
@@ -162,7 +162,18 @@ def patentsviewAPI(filename, filepath = None, app_date_from = None, app_date_to 
 FUNCTIONS TO PRE-PROCESS DATA
 """
 def load_layers_data(filename, patent_number, layers, data_dir):
+    """
+    Loads data from disk and returns preprocessed data.
     
+    Inputs
+    :filename: string type, file name to save/load data
+    :patent_number: format ['key1','key'1,...], patent_numbers to query
+    :layers: int, number of layers for which to get data
+    :data_dir: local directory of for saved data
+    
+    Outputs
+    :file_: preprocessed data
+    """
     file_ = get_layers_data(filename, data_dir, patent_number, layers)
     
     data = json.load(open(file_))
@@ -174,7 +185,18 @@ def load_layers_data(filename, patent_number, layers, data_dir):
     
 
 def get_layers_data(filename, filepath, patent_number, layers):
+    """
     
+    
+    Inputs
+    :filename: string type, data filename (without extension) for the fetched data
+    :filepath: string type, data folder path
+    :patent_number: string type, format ['key1', 'key2', ...] or 'key1'
+    :layers: 
+    
+    Outputs
+    :file_: string type, full file path of the saved data
+    """
     if (filename[-5:] == '.json'):
         filename = filename[:-5]
     
@@ -261,21 +283,26 @@ def preprocess_layer_data(file_):
     return cited_patent_list, inventor_info
 
 
-def load_preprocessed_data(files):
+def preprocess_data(files):
     """
-    Converts saved json data from file to the cleaned format used for the data analysis. (see data_preprocessing.ipynb)
+    Preprocesses saved json data from file to the format used for the data analysis. (see Methodology notebook)
 
     Input
-    :file_: path to files containing the json data, format ['file1','file2',...]
+    :files: path to files containing the json data, format ['file1','file2',...]
 
     Output
-    :data: set containing the following elements:
-     - inventors: Pandas DataFrame containing the data related to inventors.
-     - assignees: Pandas DataFrame containing the data related to assignees.
-     - patents: Collection containing the data related to patents.
-     - citations: Pandas DataFrame containing the citations data for each patent in the dataset
+    :num_by_patent_type: proportion of patents in each patent type,
+    :locations: unique list of all inventor locations, with the count of the number of inventors listed in patent applications that were based at that location at the time of the application,
+    :num_patents: total number of patent applications,
+    :num_citations: total number of citations by all patent applications,
+    :num_inventors: total number of inventors listed in all the patent applications,
+    :assignees: dataframe, list of all unique assignees with their type, number of patents, number of citations, and a :location:-like list specific to that assignee}
+    :discarded: number of datapoints discarded (see Methodology notebook)
     """
-
+    
+    discarded_data = 0
+    discarded_citations = 0
+    
     assignee_key_id = []
     assignee_org = []
     assignee_inventor_locations = []
@@ -300,23 +327,28 @@ def load_preprocessed_data(files):
                 
                 for patent in json_data[page]['patents']:
                     patent_type = patent['patent_type']
-
+                    
+                    # see Methodology notebook for description of the process
                     if (patent_type != 'reissue') and (patent_type != None) and (patent_type != ''):
                         patent_type_count[patent_type] += 1
                         add_assignees = []
+                    else:
+                        discarded_data += 1
                         
                         for assignee in patent['assignees']:
                             assignee_id = assignee['assignee_key_id']
-                            if (assignee_id not in assignee_key_id) and (assignee_id):
+                            if (assignee_id not in assignee_key_id) and (assignee_id) and (assignee['assignee_type']):
                                 assignee_key_id.append(assignee_id)
                                 assignee_type.append(assignee['assignee_type'])
                                 assignee_org.append(assignee['assignee_organization'])
                                 assignee_inventor_locations.append(collections.Counter())
                                 assignee_cited_patents_count.append(0)
                                 assignee_patents_count.append(0)
-                            if (assignee_id):
+                            if (assignee_id) and (assignee['assignee_type']):
                                 add_assignees.append(assignee_id)
                                 assignee_patents_count[assignee_key_id.index(assignee_id)] += 1
+                            else:
+                                discarded_data += 1
                             
                         for inventor in patent['inventors']:
                             lat = inventor['inventor_latitude']
@@ -326,6 +358,9 @@ def load_preprocessed_data(files):
                                 inventor_locations[(float(lat), float(lon))] += 1
                                 total_location_count[(float(lat), float(lon))] += 1
                                 total_inventor_count[inventor['inventor_key_id']] = 1
+                            else:
+                                if len(add_assignees) > 0:
+                                    discarded_data += 1
                                 
                         for assignee in add_assignees:
                             assignee_inventor_locations[assignee_key_id.index(assignee)] += inventor_locations
@@ -335,6 +370,8 @@ def load_preprocessed_data(files):
                             if (cit_patent['cited_patent_number']):
                                 total_cited_patents_count[cit_patent['cited_patent_number']] = 1
                                 cited_patents_count += 1
+                            else:
+                                discarded_citations += 1
 
                         for assignee in add_assignees:
                             assignee_cited_patents_count[assignee_key_id.index(assignee)] += cited_patents_count
@@ -355,19 +392,29 @@ def load_preprocessed_data(files):
     
     total_location_count_df = pd.DataFrame.from_dict(total_location_count, orient='index').reset_index()
     total_location_count_df.set_index('index', inplace=True)
-    
-    #inventor_info.drop_duplicates(subset=['latitude','longitude'])[['latitude','longitude']].values
 
     output = {'num_by_patent_type' : patent_type_count_df / sum(patent_type_count_df.values),
               'locations' : total_location_count_df,
               'num_patents' : sum(patent_type_count_df.values)[0],
               'num_citations' : len(total_cited_patents_count),
               'num_inventors' : len(total_inventor_count),
-              'assignees' : assignee_info}
+              'assignees' : assignee_info,
+              'discarded' : (discarded_data, discarded_citations)}
     
     return output
 
 def get_full_year_data(year, filepath):
+    """
+    Fetches data for a full year, one quarter at a time, to deal with the PatentsView limits.
+    If the data is not already on file, fetches data and saves it to filepath.
+    
+    Inputs
+    :year: string type, years for which data is requested
+    :filepath: string type, local directory for loading saved data / saving new data
+    
+    Outputs
+    :output_datafiles: list of paths to files containing the data for the full year
+    """
     
     filenames = [year + q for q in ['q1','q2','q3','q4']]
     date_from = [year + '-' + date for date in ['01-01','04-01','07-01','10-01']]
@@ -388,6 +435,20 @@ def get_full_year_data(year, filepath):
 
 
 def get_ts(full_year_data):
+    """
+    Extracts time series data from the dataset.
+    
+    Inputs
+    :full_year_data: entire dataset as returned by the load_data() function
+    
+    Outputs
+    :num_patents_ts: number of patent applications for each year
+    :num_inventors_ts: number of inventors listed in patent applications in each year
+    :num_citations_ts: number of patents cited in patent applications filed in each year
+    :num_utility_patents_ts: number of utility patent applications in each year
+    :num_design_patents_ts: number of design patent applications in each year
+    :num_individuals_ts: number of individuals listed as assignees in patent applications in each year
+    """
     
     num_patents_ts = []
     num_inventors_ts = []
@@ -403,7 +464,9 @@ def get_ts(full_year_data):
         num_utility_patents_ts.append(full_year_data[year]['num_by_patent_type'].loc['utility'] * num_patents_ts[-1])
         num_design_patents_ts.append(full_year_data[year]['num_by_patent_type'].loc['design'] * num_patents_ts[-1])
         num_individuals_ts.append(len(full_year_data[year]['assignees'].query("type == '4' | type == '5'")))
-        
+    
+    # flatten the time series and divide by 1000 to make the scale more readable when plotting the data
+    # number of individuals is low enough as is
     num_patents_ts = np.array(num_patents_ts).flatten() / 1000
     num_inventors_ts = np.array(num_inventors_ts).flatten() / 1000
     num_citations_ts = np.array(num_citations_ts).flatten() / 1000
@@ -415,12 +478,23 @@ def get_ts(full_year_data):
     
     
 def load_data(year_range, data_dir):
+    """
+    Converts saved jsondata from the PatentsView API to the format that is most useful in answering 
+    the research topics stated in Part 1 (See Methodology notebook).
+    
+    Inputs
+    :year_range: range type, range of years for which data is needed
+    :data_dir: string type, local directory for loading saved data / saving new data
+    
+    Outputs
+    :full_year_data: preprocessed data
+    """
 
     full_year_data = {}
 
     for year in year_range:
         datafiles = get_full_year_data(str(year), data_dir)
         print('loading data from disk')
-        full_year_data[str(year)] = load_preprocessed_data(datafiles)
+        full_year_data[str(year)] = preprocess_data(datafiles)
 
     return full_year_data
