@@ -55,8 +55,8 @@ def get_png(full_year_data, viz, year, k = None, zoom_on = None) :
         zoom_start = 1.75
     
     map_ = folium.Map(center, zoom_start = zoom_start, prefer_canvas = False, width= 1000, height = 600,
-                      min_zoom = 2, no_wrap = True, max_bounds = True, min_lat = -60, max_lat = 80,
-                      zoom_control = False)
+                      min_zoom = 2, max_zoom = 5, no_wrap = True, max_bounds = True, min_lat = -60, 
+                      max_lat = 80, zoom_control = False)
     
     if viz == 'All':
     

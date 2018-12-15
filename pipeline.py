@@ -420,6 +420,7 @@ def load_data(year_range, data_dir):
 
     for year in year_range:
         datafiles = get_full_year_data(str(year), data_dir)
+        print('loading data from disk')
         full_year_data[str(year)] = load_preprocessed_data(datafiles)
 
     return full_year_data
