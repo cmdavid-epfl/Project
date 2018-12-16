@@ -286,7 +286,8 @@ def compute_similarities(layers_data1, layers_data2, name):
 	        if (citation in data1_patents_list) and (citation in data2_patents_list):
 	            layer_similarities += 1
 	    
-	    similarities.append(layer_similarities/len(unique_patents_list))
+	    length = min(len(data1_patents_list), len(data2_patents_list))
+	    similarities.append(layer_similarities/length)
     
     text_file = open(name + '.html', "w")
     text_file.write(pd.DataFrame({'Similarity' : similarities}, 
