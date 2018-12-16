@@ -208,8 +208,8 @@ def save_layers(layers_data, name, zoom_on = None, layered = True):
     :zoom_on: (latitude, longitude, zoom) specifying the initial position of the map (by default: World)
     :layered: whether to add layer control to a single map, or produce many maps without layer control
     """
-    blur = 5
-    radius = 10
+    blur = 2
+    radius = 5
     min_opacity = 0.5
     max_val = 1
     
@@ -223,15 +223,15 @@ def save_layers(layers_data, name, zoom_on = None, layered = True):
     if (layered):
         # produce a single map
         map_ = folium.Map(center, zoom_start = zoom_start, width= 960, height = 600,
-                          min_zoom = 2, no_wrap = True, max_bounds = True, min_lat = -60, max_lat = 80,
-                          zoom_control = False)
+                          min_zoom = 2, max_zoom = 2, no_wrap = True, max_bounds = True, min_lat = -60, 
+                          max_lat = 80, zoom_control = False)
     
     for layer in layers_data:
         if layered == False:
             # produce one map for each layer
             map_ = folium.Map(center, zoom_start = zoom_start, width= 960, height = 600,
-                              min_zoom = 2, no_wrap = True, max_bounds = True, min_lat = -60, max_lat = 80,
-                              zoom_control = False)
+                              min_zoom = 2, max_zoom = 2, no_wrap = True, max_bounds = True, 
+                              min_lat = -60, max_lat = 80, zoom_control = False)
             
         # for each layer, get the list of inventor locations
         locations = layers_data[layer]['inventors'].values
