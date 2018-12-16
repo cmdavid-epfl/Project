@@ -7,6 +7,7 @@ import requests
 import json
 import collections
 import time
+from collections import Counter
 
 """
 FUNCTIONS TO QUERY AND SAVE DATA
@@ -160,128 +161,9 @@ def patentsviewAPI(filename, filepath = None, app_date_from = None, app_date_to 
 
 """
 FUNCTIONS TO PRE-PROCESS DATA
+
+FUNCTIONS FOR PART 1
 """
-def load_layers_data(filename, patent_number, layers, data_dir):
-    """
-    Loads data from disk and returns preprocessed data.
-    
-    Inputs
-    :filename: string type, file name to save/load data
-    :patent_number: format ['key1','key'1,...], patent_numbers to query
-    :layers: int, number of layers for which to get data
-    :data_dir: local directory of for saved data
-    
-    Outputs
-    :file_: preprocessed data
-    """
-    file_ = get_layers_data(filename, data_dir, patent_number, layers)
-    
-    data = json.load(open(file_))
-    
-    for layer in data:
-        data[layer]['inventors'] = pd.read_json(data[layer]['inventors'])
-    
-    return data
-    
-
-def get_layers_data(filename, filepath, patent_number, layers):
-    """
-    
-    
-    Inputs
-    :filename: string type, data filename (without extension) for the fetched data
-    :filepath: string type, data folder path
-    :patent_number: string type, format ['key1', 'key2', ...] or 'key1'
-    :layers: 
-    
-    Outputs
-    :file_: string type, full file path of the saved data
-    """
-    if (filename[-5:] == '.json'):
-        filename = filename[:-5]
-    
-    filenames = [filename + '_layer' + str(q) + '.json' for q in range(layers)]
-    output_data = {}
-    
-    for i,file_ in enumerate(filenames):
-        print(filepath,file_)
-        if os.path.isfile(os.path.join(filepath,file_)):
-            datafile = os.path.join(filepath,file_)
-            print('already on file')
-        else:
-            datafile = get_cited_patents_data(file_, filepath, patent_number)
-        
-        cited_patents, inventors = preprocess_layer_data(datafile)
-        
-        output_data[i] = {'cited_patents' : cited_patents,
-                          'inventors' : inventors.to_json()}
-        
-        patent_number = cited_patents.copy()
-        
-    # save data
-    print('saving data')
-    file_ = os.path.join(filepath,filename + '.json')
-    with open(file_, 'w') as f:
-        json.dump(output_data, f,ensure_ascii=False)
-        
-    return file_
-
-
-def get_cited_patents_data(filename, filepath, patent_numbers):
-    
-    data = {}
-    i = 0
-    while ((i+1)*100 < len(patent_numbers)):
-        datafile = patentsviewAPI('temp.json', filepath, patent_number = patent_numbers[i*100:(i+1)*100])
-        data[i] = json.load(open(datafile))
-        i += 1
-
-    datafile = patentsviewAPI('temp.json', filepath, patent_number = patent_numbers[i*100:])
-    data[i] = json.load(open(datafile))
-    
-    file_ = os.path.join(filepath,filename)
-    
-    with open(file_, 'w') as f:
-        json.dump(data, f)
-    
-    return file_
-
-
-def preprocess_layer_data(file_):
-
-    cited_patent_list = []
-    inventor_key_id = []
-    inventor_latitude = []
-    inventor_longitude = []
-    
-    json_data = json.load(open(file_))
-    
-    for fold in json_data:
-
-        for page in json_data[fold]:
-                
-            for patent in json_data[fold][page]['patents']:
-                
-                if (patent['patent_type'] != 'reissue'):
-                    
-                    for inventor in patent['inventors']:
-                        lat = inventor['inventor_latitude']
-                        lon = inventor['inventor_longitude']
-                        if (lat != '0.1') and (lat != None) and (inventor['inventor_key_id'] not in inventor_key_id) :
-                            inventor_key_id.append(inventor['inventor_key_id'])
-                            inventor_latitude.append(float(lat))
-                            inventor_longitude.append(float(lon))
-
-                    for cit_patent in patent['cited_patents']:
-                        cit_pat_num = cit_patent['cited_patent_number']
-                        if (cit_pat_num != None):
-                            cited_patent_list.append(cit_pat_num)
-                                    
-    inventor_info = pd.DataFrame(data = {'latitude' : inventor_latitude,
-                                         'longitude' : inventor_longitude}, index = inventor_key_id)
- 
-    return cited_patent_list, inventor_info
-
 
 def preprocess_data(files):
     """
@@ -300,7 +182,9 @@ def preprocess_data(files):
     :discarded: number of datapoints discarded (see Methodology notebook)
     """
     
-    discarded_data = 0
+    discarded_patents = 0
+    discarded_assignees = []
+    discarded_inventors = []
     discarded_citations = 0
     
     assignee_key_id = []
@@ -332,8 +216,6 @@ def preprocess_data(files):
                     if (patent_type != 'reissue') and (patent_type != None) and (patent_type != ''):
                         patent_type_count[patent_type] += 1
                         add_assignees = []
-                    else:
-                        discarded_data += 1
                         
                         for assignee in patent['assignees']:
                             assignee_id = assignee['assignee_key_id']
@@ -348,7 +230,8 @@ def preprocess_data(files):
                                 add_assignees.append(assignee_id)
                                 assignee_patents_count[assignee_key_id.index(assignee_id)] += 1
                             else:
-                                discarded_data += 1
+                                if assignee['assignee_key_id'] not in discarded_assignees:
+                                    discarded_assignees.append(assignee['assignee_key_id'])
                             
                         for inventor in patent['inventors']:
                             lat = inventor['inventor_latitude']
@@ -359,8 +242,8 @@ def preprocess_data(files):
                                 total_location_count[(float(lat), float(lon))] += 1
                                 total_inventor_count[inventor['inventor_key_id']] = 1
                             else:
-                                if len(add_assignees) > 0:
-                                    discarded_data += 1
+                                if inventor['inventor_key_id'] not in discarded_inventors:
+                                    discarded_inventors.append(inventor['inventor_key_id'])
                                 
                         for assignee in add_assignees:
                             assignee_inventor_locations[assignee_key_id.index(assignee)] += inventor_locations
@@ -375,6 +258,9 @@ def preprocess_data(files):
 
                         for assignee in add_assignees:
                             assignee_cited_patents_count[assignee_key_id.index(assignee)] += cited_patents_count
+                            
+                    else:
+                        discarded_patents += 1
                             
             else:
                 print('error: empty page')
@@ -399,7 +285,7 @@ def preprocess_data(files):
               'num_citations' : len(total_cited_patents_count),
               'num_inventors' : len(total_inventor_count),
               'assignees' : assignee_info,
-              'discarded' : (discarded_data, discarded_citations)}
+              'discarded' : (discarded_patents, discarded_citations, len(discarded_assignees), len(discarded_inventors))}
     
     return output
 
@@ -477,6 +363,55 @@ def get_ts(full_year_data):
     return num_patents_ts, num_inventors_ts, num_citations_ts, num_utility_patents_ts, num_design_patents_ts, num_individuals_ts
     
     
+def get_all_locations(data):
+    """
+    Returns list of locations and the number of inventors at each location for the given data
+    
+    Inputs
+    :data: preprocessed locations dataframe
+    
+    Outputs
+    :locations: list in format required by Folium
+    """
+    locations = [(data.index.values[i][0],
+                  data.index.values[i][1],
+                  data.values[i][0]) 
+                 for i in range(len(data))]
+
+    return locations
+    
+    
+def get_top_k_locations(data, k):
+    """
+    Returns list of locations and the number of inventors at each location, counting only the data from the top k assignees, ranked by number of patent applications.
+    
+    Inputs
+    :data: preprocessed locations dataframe
+    :k: length of sorted locations list to return
+    
+    Outputs
+    :locations: list in format required by Folium
+    :top: dataframe listing the organization of the top assignees and their number of patent applications
+    :num_inventors: sum of number of inventors for the top k assignees
+    """
+    assignees = data[['organization', 'patents']].values[:k,:]
+    loc_counters = data['inventors_loc'].values[:k]
+    num_inventors = 0
+    locations = Counter()
+    
+    for counter in loc_counters:
+        num_inventors += sum(counter.values())
+        locations += counter
+    
+    locations = np.hstack([np.array(list(locations.keys())), 
+                           np.array(list(locations.values()))[:,None]])
+    
+    top = pd.DataFrame({'Top Assignees' : assignees[:,0],
+                        'Patent Applications' : assignees[:,1]})
+    
+    return locations, top, num_inventors
+
+    
 def load_data(year_range, data_dir):
     """
     Converts saved jsondata from the PatentsView API to the format that is most useful in answering 
@@ -498,3 +433,179 @@ def load_data(year_range, data_dir):
         full_year_data[str(year)] = preprocess_data(datafiles)
 
     return full_year_data
+
+
+def get_assignee_ts(full_year_data, assignees):
+    """
+    Returns the time series of the number of inventors for the specified assignees
+    
+    Inputs
+    :full_year_data: all data
+    
+    Outputs
+    :assignees: list of assignees for which to get the time series
+    """
+    
+    ts = pd.DataFrame(columns = assignees, index = np.array(list(full_year_data.keys())).astype('int'))
+    
+    for year in full_year_data:
+        for assignee in assignees:
+            counter = full_year_data[year]['assignees'].query('organization == @assignee')['inventors_loc'].values
+            if len(counter) > 0:
+                ts[assignee][int(year)] = sum(counter[0].values())
+            else:
+                ts[assignee][int(year)] = 0
+     
+    return ts
+
+"""
+FUNCTIONS TO PRE-PROCESS DATA
+
+FUNCTIONS FOR PART 2
+"""
+
+def load_layers_data(filename, patent_number, layers, data_dir):
+    """
+    Converts saved jsondata from the PatentsView API to the format that is most useful in answering 
+    the research topics stated in Part 2 (See Methodology notebook).
+    
+    Inputs
+    :filename: string type, file name to save/load data
+    :patent_number: format ['key1','key'1,...], patent_numbers to query
+    :layers: int, number of layers for which to get data
+    :data_dir: local directory of for saved data
+    
+    Outputs
+    :file_: preprocessed data
+    """
+    file_ = get_layers_data(filename, data_dir, patent_number, layers)
+    
+    data = json.load(open(file_))
+    
+    for layer in data:
+        data[layer]['inventors'] = pd.read_json(data[layer]['inventors'])
+    
+    return data
+    
+
+def get_layers_data(filename, filepath, patent_number, layers):
+    """
+    Fetches all data, one layer at a time.
+    If the data is not already on file, fetches data and saves it to filepath.
+    
+    Inputs
+    :filename: string type, data filename for the fetched data
+    :filepath: string type, data folder path
+    :patent_number: string type, format ['key1', 'key2', ...] or 'key1'
+    :layers: int, number of layers for which to get data
+    
+    Outputs
+    :file_: string type, full file path of the saved data
+    """
+    if (filename[-5:] == '.json'):
+        filename = filename[:-5]
+    
+    filenames = [filename + '_layer' + str(q) + '.json' for q in range(layers)]
+    output_data = {}
+    
+    for i,file_ in enumerate(filenames):
+        print(filepath,file_)
+        if os.path.isfile(os.path.join(filepath,file_)):
+            datafile = os.path.join(filepath,file_)
+            print('already on file')
+        else:
+            datafile = get_cited_patents_data(file_, filepath, patent_number)
+        
+        # preprocess the data
+        cited_patents, inventors = preprocess_layer_data(datafile)
+        
+        output_data[i] = {'cited_patents' : cited_patents,
+                          'inventors' : inventors.to_json()}
+        
+        patent_number = cited_patents.copy()
+        
+    # save data for all layers in a single file
+    print('saving data')
+    file_ = os.path.join(filepath,filename + '.json')
+    with open(file_, 'w') as f:
+        json.dump(output_data, f,ensure_ascii=False)
+        
+    return file_
+
+
+def get_cited_patents_data(filename, filepath, patent_numbers):
+    """
+    Fetches the data for the given list of patent_numbers from the PatentsView API.
+    
+    Inputs
+    :filename: string type, data filename to save the data
+    :filepath: string type, data folder path to save the data
+    :patent_numbers: list of patent numbers for which to query.
+    
+    Outputs
+    :file_: string type, full file path of the saved data
+    """
+    data = {}
+    i = 0
+    # queries for a fixed number of patents at a time, to prevent errors
+    while ((i+1)*100 < len(patent_numbers)):
+        datafile = patentsviewAPI('temp.json', filepath, patent_number = patent_numbers[i*100:(i+1)*100])
+        data[i] = json.load(open(datafile))
+        i += 1
+
+    datafile = patentsviewAPI('temp.json', filepath, patent_number = patent_numbers[i*100:])
+    data[i] = json.load(open(datafile))
+    
+    file_ = os.path.join(filepath,filename)
+    # save data to file_
+    with open(file_, 'w') as f:
+        json.dump(data, f)
+    
+    return file_
+
+
+def preprocess_layer_data(file_):
+    """
+    Preprocesses saved json data from file to the format used for the data analysis. (see Methodology notebook)
+
+    Input
+    :file_: path to file containing the json data, format
+
+    Output
+    :cited_patent_list: list of cited patents in the data,
+    :inventor_info: dataframe containing the unique list of inventors and their location
+    """
+    cited_patent_list = []
+    inventor_key_id = []
+    inventor_latitude = []
+    inventor_longitude = []
+    
+    json_data = json.load(open(file_))
+    
+    for fold in json_data:
+
+        for page in json_data[fold]:
+                
+            for patent in json_data[fold][page]['patents']:
+                
+                if (patent['patent_type'] != 'reissue'):
+                    
+                    for inventor in patent['inventors']:
+                        lat = inventor['inventor_latitude']
+                        lon = inventor['inventor_longitude']
+                        
+                        # we only count each unique inventor once
+                        if (lat != '0.1') and (lat != None) and (inventor['inventor_key_id'] not in inventor_key_id) :
+                            inventor_key_id.append(inventor['inventor_key_id'])
+                            inventor_latitude.append(float(lat))
+                            inventor_longitude.append(float(lon))
+
+                    for cit_patent in patent['cited_patents']:
+                        cit_pat_num = cit_patent['cited_patent_number']
+                        if (cit_pat_num != None):
+                            cited_patent_list.append(cit_pat_num)
+                                    
+    inventor_info = pd.DataFrame(data = {'latitude' : inventor_latitude,
+                                         'longitude' : inventor_longitude}, index = inventor_key_id)
+ 
+    return cited_patent_list, inventor_info
