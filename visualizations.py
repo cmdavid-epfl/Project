@@ -290,8 +290,7 @@ def compute_similarities(layers_data1, layers_data2, name):
     
     text_file = open(name + '.html', "w")
     text_file.write(pd.DataFrame({'Similarity' : similarities}, 
-	                             index = layers_range).to_html(index = False, 
-	                                                           col_space=200,
+	                             index = layers_range).to_html(index = True,
 	                                                           justify = 'left'))
     text_file.close()
 	
