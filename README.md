@@ -79,6 +79,8 @@ This python file contains all the functions to create the visuals which are incl
 
 - **save_layers**: Produce HTML rendering of Folium map of the distribution of the inventors in each layer of the network supporting a specific patent.
 
+- **compute_similarities**: Produce HTML table containing the percentage of similarities in patent citations between two patent networks, at each layer.
+
 
 ## Work Done and Plan for the weeks to come
 Between the last Milestone and today, All team members were involved in coming up with the solutions for the data analysis and visualizations. A lot the of data preprocessing was already done at the time of the last Milestone, though between then and now, it had to be adusted and refined iteratively at the same time as the visualization functions were developped. David did a lot of the technical parts (pipeline and visualizations), Tor concentrated on the first part of the Data Story, and Marie on the second, though the general methodology for our solutions was engineered by the whole team.

@@ -247,3 +247,58 @@ def save_layers(layers_data, name, zoom_on = None, layered = True):
         folium.LayerControl(collapsed = False).add_to(map_)
         # save map to file
         map_.save(name + '.html')
+
+
+def compute_similarities(layers_data1, layers_data2, name):
+    """
+    Produce HTML table containing the percentage of similarities in patent citations between two patent networks, at each layer
+    
+    Inputs
+    :layers_data*: sets to compare, as returned when calling load_layers_data from pipeline module
+    :name: string format, name of HTML file to which to save the table
+    """
+    
+    if len(layers_data1) < len(layers_data2):
+	    layers_range = layers_data1.keys()
+    else:
+	    layers_range = layers_data2.keys()
+	
+    similarities = []
+    unique_patents_list = []
+    data1_patents_list = []
+    data2_patents_list = []
+    
+    for layer in layers_range:
+	    for citation in layers_data1[layer]['cited_patents']:
+	        if citation not in unique_patents_list:
+	            unique_patents_list.append(citation)
+	        if citation not in data1_patents_list:
+	            data1_patents_list.append(citation)
+	            
+	    for citation in layers_data2[layer]['cited_patents']:
+	        if citation not in unique_patents_list:
+	            unique_patents_list.append(citation)
+	        if citation not in data2_patents_list:
+	            data2_patents_list.append(citation)
+	            
+	    layer_similarities = 0
+	    for citation in unique_patents_list:
+	        if (citation in data1_patents_list) and (citation in data2_patents_list):
+	            layer_similarities += 1
+	    
+	    similarities.append(layer_similarities/len(unique_patents_list))
+    
+    text_file = open(name + '.html', "w")
+    text_file.write(pd.DataFrame({'Similarity' : similarities}, 
+	                             index = layers_range).to_html(index = False, 
+	                                                           col_space=200,
+	                                                           justify = 'left'))
+    text_file.close()
+	
+	
+	
+	
+	
+	
+	
+	
