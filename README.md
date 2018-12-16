@@ -4,7 +4,7 @@
 
 ## Front Matter
 Innovation today is certainly among the most important factors determining the success of organizations, universities, start-ups, etc. While innovation is often portrayed as the product of either one charismatic leader - or a ragtag team of geniuses - in reality we suspect that innovations, however important, happen in small steps supported by large networks of people.
-s
+
 We also believe that this former image of innovation is counter-productive, insofar as it creates unrealistic expectations of what it takes to be an innovator. We think that it is important for people to realize the extent to which innovation is mostly bred by networks of collaboration. But how to explore this issue in a quantitative manner?
 
 One possible way is through patents. By looking at one patent’s citations, for instance, we can get an idea about which prior inventions either inspired, supported, or even made possible the other patents development. By peeling back these layers, we can then visualize a network of innovation steps, and the people behind them.
@@ -42,7 +42,7 @@ The project files in the repository are as follows:
 - visualizations.py
 
 ### Methodology.ipynb
-This notebook contains the details of the procedure we followed to determine to answer the research questions. The notebook can also be found **[on the story website](https://cmdavid-epfl.github.io/methodology/)**.
+This notebook contains the details of the procedure we followed to answer the research questions. The notebook can also be found **[on the story website](https://cmdavid-epfl.github.io/methodology/)**.
 
 ### pipeline.py
 This python file contains all the preprocessing and data formatting functions required for the analysis.
@@ -51,8 +51,8 @@ This python file contains all the preprocessing and data formatting functions re
   - **query**: Forms query filters string to pass into **get_data**.
   - **get_data** : Extract and save data from the PatentsView API to disk.
 
-- **load_data**: preprocesses the raw json data from the PatentsView API for a give range (For our purposes, we call it for the time range 1990-2016). To do so, calls on the following functions:
-  - **get_full_year_data**: Fetches PatentsView data for a full year, one quarter at a time, to deal with the PatentsView limits. To do so, calls on **patentsviewAPI**
+- **load_data**: preprocesses the raw json data from the PatentsView API for a given range (For our purposes, we call it for the time range 1990-2016). To do so, calls on the following functions:
+  - **get_full_year_data**: Fetches PatentsView data for a full year, one quarter at a time, to deal with the PatentsView query-limits. To do so, calls on **patentsviewAPI**
   - **preprocess_data**: Preprocesses saved json data to the format used for the data analysis.
   
 - **get_ts**: Extracts time series data from the loaded and preprocessed dataset.
